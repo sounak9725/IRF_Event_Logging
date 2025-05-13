@@ -28,7 +28,7 @@ const ERROR_CODES = {
 const RATE_LIMIT_CONFIG = {
     WINDOW: 60 * 60 * 1000, // 1 hour window
     MAX_REQUESTS: 10, // Maximum requests per window
-    COOLDOWN: 5 * 60 * 1000 // 5 minutes cooldown between requests
+    COOLDOWN: 0.5 * 60 * 1000 // 5 minutes cooldown between requests
 };
 
 // Store user request timestamps
@@ -156,65 +156,43 @@ async function isRowFilled(spreadsheetId, sheetName, rowNumber) {
 }
 
 module.exports = {
-    name: 'log_event',
-    description: 'Log an event to the quota tracking spreadsheet',
+    name: 'log_oda_ndd',
+    description: 'Log an discpline stuff to the quota tracking spreadsheet',
     data: new SlashCommandBuilder()
-        .setName('log_event')
-        .setDescription('Log an event to the quota tracking spreadsheet')
-        .addStringOption(option => 
-            option.setName('event_type')
-                .setDescription('Type of event you hosted')
-                .setRequired(true)
-                .addChoices(
-                    { name: 'ND Inspection/Meeting', value: 'ND Inspection/Meeting' },
-                    { name: 'Border Simulation', value: 'Border Simulation' },
-                    { name: 'Protocol', value: 'Protocol' },
-                    { name: 'Combat Training', value: 'Combat Training' },
-                    { name: 'Defense Training', value: 'Defense Training' },
-                    { name: 'Enhancement Training', value: 'Enhancement Training' },
-                    { name: 'Medical Training', value: 'Medical Training' },
-                    { name: 'Patrol', value: 'Patrol' },
-                    { name: 'Recruitment Session', value: 'Recruitment Session' },
-                    { name: 'Tryout', value: 'Tryout' },
-                    { name: 'Defensive Raid', value: 'Defensive Raid' },
-                    { name: 'Gamenight', value: 'Gamenight' }
-                ))
-        .addStringOption(option => 
-            option.setName('event_scope')
-                .setDescription('Is this a Divisional-Wide or Unit Event?')
-                .setRequired(true)
-                .addChoices(
-                    { name: 'Divisional-Wide', value: 'Divisional-Wide' },
-                    { name: 'Unit Event', value: 'Unit Event' }
-                ))
-        .addStringOption(option => 
-            option.setName('co_hosts')
-                .setDescription('Usernames of co-hosts (comma separated, leave empty if none)')
-                .setRequired(true))
-        .addStringOption(option => 
-            option.setName('attendees')
-                .setDescription('Attendees usernames and DPs awarded (format: username:DP, username:DP)')
-                .setRequired(true))
-        .addIntegerOption(option => 
-            option.setName('attendee_count')
-                .setDescription('Number of attendees at your event')
-                .setRequired(true))
-        .addStringOption(option => 
-            option.setName('proof')
-                .setDescription('Link to image/screenshot of the event')
-                .setRequired(true))
-        .addIntegerOption(option => 
-            option.setName('event_duration')
-                .setDescription('Total time of the event (in minutes)')
-                .setRequired(true))
-        .addStringOption(option => 
-            option.setName('notes')
-                .setDescription('Notes for AU (optional)')
-                .setRequired(true))
-        .addBooleanOption(option => 
-            option.setName('double_quota')
-                .setDescription('Is this a double quota event?')
-                .setRequired(true)),
+    .setName('log_oda_ndd')
+    .setDescription('Log an IA-related event to the activity sheet')
+    .addStringOption(option =>
+        option.setName('ia_rank')
+            .setDescription('Your IA Rank')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Junior Detective (Candidate)', value: 'Junior Detective (Candidate)' },
+                { name: 'Detective', value: 'Detective' },
+                { name: 'Senior Detective', value: 'Senior Detective' },
+                { name: 'Command (1ic & 2ic)', value: 'Command (1ic & 2ic)' }
+            ))
+    .addStringOption(option =>
+        option.setName('activity')
+            .setDescription('What activity are you logging?')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Personnel Report', value: 'Personnel Report' },
+                { name: 'Case File', value: 'Case File' },
+                { name: 'Training Report', value: 'Training Report' },
+                { name: 'Discord Moderation', value: 'Discord Moderation' },
+                { name: 'Enhancement Training', value: 'Enhancement Training' },
+                { name: 'Security Check', value: 'Security Check' },
+                { name: 'Candidate Event Supervision (Senior Detective+)', value: 'Candidate Event Supervision (Senior Detective+)' }
+            ))
+    .addStringOption(option =>
+        option.setName('proof')
+            .setDescription('URL to image or evidence')
+            .setRequired(true))
+    .addStringOption(option =>
+        option.setName('notes')
+            .setDescription('Optional notes (write N/A if none)')
+            .setRequired(true)),
+
 
     /**
     * @param {Client} client
@@ -235,7 +213,7 @@ module.exports = {
             
             // Define your spreadsheet ID
             const SPREADSHEET_ID = '1HFjg2i0KiH956mdFRaoVzCNUAI5XaiNhIdh0i2bZ_fc';
-            const SHEET_NAME = 'Sheet3';
+            const SHEET_NAME = 'Sheet5';
 
             await interaction.deferReply({ ephemeral: true });
             
@@ -251,19 +229,12 @@ module.exports = {
                 );
             }
             
-            // Get input values from the command
             const robloxUsername = rowifiResult.username;
             const discordUsername = interaction.user.username;
-            const eventScope = interaction.options.getString('event_scope');
-            const eventType = interaction.options.getString('event_type');
-            const coHosts = interaction.options.getString('co_hosts') || '';
-            const attendees = interaction.options.getString('attendees');
-            const attendeeCount = interaction.options.getInteger('attendee_count');
+            const iaRank = interaction.options.getString('ia_rank');
+            const activity = interaction.options.getString('activity');
             const proof = interaction.options.getString('proof');
-            const eventDuration = interaction.options.getInteger('event_duration');
-            const notes = interaction.options.getString('notes') || '';
-            const password = "HARDCODE"; // Placeholder for password
-            const doubleQuota = interaction.options.getBoolean('double_quota');
+            const notes = interaction.options.getString('notes');;
             
             // Validate the proof link
             if (!proof || !proof.startsWith('http')) {
@@ -289,28 +260,16 @@ module.exports = {
             });
             const timestamp = `${formattedDate} ${formattedTime}`;
             
-            // Based on your column routing:
-            // C:Timestamp D:Roblox Username E:Discord Username F:Divisional-Wide or Unit Event?
-            // G:Event Type H:Co-hosts I:Attendees J:Attendee Count K:Proof L:Duration
-            // M:Notes N:Password O:Double Quota
             
             // Create array with empty values for columns A and B which appear to be admin-managed
             const rowData = [
-                '',                      // A - Empty or admin managed
-                '',                      // B - Empty or admin managed  
-                timestamp,               // C - Timestamp
-                robloxUsername,          // D - Roblox Username
-                discordUsername,         // E - Discord Username
-                eventScope,              // F - Divisional-Wide or Unit Event?
-                eventType,               // G - Event Type
-                coHosts,                 // H - Co-hosts Username
-                attendees,               // I - Attendees usernames and DPs awarded
-                attendeeCount.toString(),// J - Number of attendees
-                proof,                   // K - Proof link
-                eventDuration.toString(),// L - Total time (minutes)
-                notes,                   // M - Notes for AU
-                password,                // N - Individual password
-                doubleQuota ? 'Yes' : 'No'// O - Double Quota?
+             timestamp,          // A: Timestamp
+            robloxUsername,     // B: Roblox Username
+             discordUsername,    // C: Discord Username
+            iaRank,             // D: IA Rank
+             activity,           // E: Activity
+             proof,              // F: Proof
+            notes               // G: Notes
             ];
             
             try {
@@ -346,7 +305,7 @@ module.exports = {
                 // Write directly to the specific row
                 const response = await sheets.spreadsheets.values.update({
                     spreadsheetId: SPREADSHEET_ID,
-                    range: `${SHEET_NAME}!A${nextRow}:O${nextRow}`,
+                    range: `${SHEET_NAME}!A${nextRow}:G${nextRow}`, // Writing A to G
                     valueInputOption: 'USER_ENTERED',
                     resource: {
                         values: [rowData]
@@ -357,28 +316,22 @@ module.exports = {
                 
                 // Create confirmation embed
                 const confirmEmbed = new EmbedBuilder()
-                    .setColor('#00FF00')
-                    .setTitle('✅ Event Submitted Successfully')
-                    .setDescription(`Your ${eventType} event has been recorded for quota tracking.`)
-                    .addFields(
-                        { name: 'Host', value: robloxUsername, inline: true },
-                        { name: 'Discord Username', value: discordUsername, inline: true },
-                        { name: 'Event Scope', value: eventScope, inline: true },
-                        { name: 'Event Type', value: eventType, inline: true },
-                        { name: 'Co-Hosts', value: coHosts || 'None', inline: true },
-                        { name: 'Attendee Count', value: attendeeCount.toString(), inline: true },
-                        { name: 'Duration (min)', value: eventDuration.toString(), inline: true },
-                        { name: 'Double Quota', value: doubleQuota ? 'Yes' : 'No', inline: true },
-                        { name: 'Proof', value: `[View Image](${proof})`, inline: true }
-                    )
-                    .setTimestamp()
-                    .setFooter({ text: 'Your event will be reviewed by admin staff' });
-                
-                if (notes) {
-                    confirmEmbed.addFields({ name: 'Notes for AU', value: notes, inline: false });
-                }
-                
+                 .setColor('#00FF00')
+                 .setTitle('✅ Event Submitted Successfully')
+                 .setDescription('Your IA log has been submitted successfully.')
+                  .addFields(
+                   { name: 'Roblox Username', value: robloxUsername, inline: true },
+                   { name: 'Discord Username', value: discordUsername, inline: true },
+                   { name: 'IA Rank', value: iaRank, inline: true },
+                   { name: 'Activity', value: activity, inline: true },
+                   { name: 'Proof', value: `[View Proof](${proof})`, inline: false },
+                   { name: 'Notes', value: notes || 'N/A', inline: false }
+                  )
+                .setTimestamp()
+                 .setFooter({ text: 'This log is now recorded in the IA sheet.' });
+
                 await interaction.editReply({ content: '', embeds: [confirmEmbed] });
+
                 
             } catch (sheetError) {
                 console.error('Error when trying to write to sheet:', sheetError);
