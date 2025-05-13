@@ -5,10 +5,10 @@ const { getRowifi } = require("../../../functions");
 const nbx = require("noblox.js");
 
 module.exports = {
-  name: "rowificheck",
+  name: "rowificheck_rg",
   description: "Gives you back the rowifi details.",
   data: new SlashCommandBuilder()
-    .setName("rowificheck")
+    .setName("rowificheck_rg")
     .setDescription("Gives you back the rowifi details")
     .addUserOption(option => {
       return option

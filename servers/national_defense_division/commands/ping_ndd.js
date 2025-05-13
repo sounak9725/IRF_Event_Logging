@@ -2,10 +2,10 @@
 const { SlashCommandBuilder, Client, CommandInteraction } = require('discord.js');
 
 module.exports = {
-    name: 'ping',
+    name: 'ping_ndd',
     description: 'Shows the bot\'s ping.',
     data: new SlashCommandBuilder()
-        .setName('ping')
+        .setName('ping_ndd')
         .setDescription('Bot\'s ping.'),
    /**
    * @param {Client} client
