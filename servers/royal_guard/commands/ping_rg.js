@@ -2,10 +2,10 @@
 const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFlags } = require('discord.js');
 
 module.exports = {
-    name: 'ping_ndd',
+    name: 'ping_rg',
     description: 'Shows the bot\'s latency information.',
     data: new SlashCommandBuilder()
-        .setName('ping_ndd')
+        .setName('ping_rg')
         .setDescription('Displays the bot\'s latency statistics.'),
    /**
    * @param {Client} client

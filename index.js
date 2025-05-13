@@ -263,7 +263,7 @@ client.once("ready", async () => {
     // Setup bot activities (keeping your existing code)
     const activities = [
       "Suman is sleeping",
-      "Staff went on vacation",
+      "Logging Events",
     ];
   
     let i = 0;

@@ -1,8 +1,9 @@
 // eslint-disable-next-line no-unused-vars
 const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFlags } = require('discord.js');
 const { sheets, getCachedSheetData } = require('../../../utils/googleSheetsAuth');
-const { getRowifi } = require('../../../functions');
+const { getRowifi, interactionEmbed } = require('../../../functions');
 const config = require('../../../config.json');
+const { logevent } = require('../../../permissions.json').ndd;
 
 // Custom error class for better error handling
 class LogQuotaError extends Error {
@@ -185,7 +186,7 @@ module.exports = {
                 .setRequired(true)
                 .addChoices(
                     { name: 'Divisional-Wide', value: 'Divisional-Wide' },
-                    { name: 'Unit Event', value: 'Unit Event' }
+                    { name: '27th Medical Corps', value: '27th Medical Corps' }
                 ))
         .addStringOption(option => 
             option.setName('co_hosts')
@@ -221,7 +222,16 @@ module.exports = {
     * @param {CommandInteraction} interaction
     */
     run: async (client, interaction) => {
+        
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        
         try {
+
+              const hasRole = logevent.some(roleId => interaction.member.roles.cache.has(roleId));
+            if (!hasRole) {
+             return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
+             }
             // Check rate limits
             const rateLimitCheck = checkRateLimit(interaction.user.id);
             if (!rateLimitCheck.allowed) {
@@ -237,7 +247,6 @@ module.exports = {
             const SPREADSHEET_ID = '1HFjg2i0KiH956mdFRaoVzCNUAI5XaiNhIdh0i2bZ_fc';
             const SHEET_NAME = 'Sheet3';
 
-            await interaction.deferReply({ ephemeral: true });
             
             // Get Roblox username from Rowifi
             const discordId = interaction.user.id;

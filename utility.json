@@ -2,15 +2,15 @@
   "ministries": [
     {
       "name": "National Defense Division",
-      "serverID": "980675269541134386"
+      "serverID": "1292166020814868654"
     },
     {
       "name": "Royal Guard",
-      "serverID": "960952766350639154"
+      "serverID": "466432774182666240"
     },
     {
-      "name": "Administrative Community Services",
-      "serverID": "960952766350639154"
+      "name": "Military Police",
+      "serverID": "493315283574980628"
     }
   ]
 }

@@ -1,6 +1,6 @@
 // eslint-disable no-undef
 // eslint-disable-next-line no-unused-vars
-const { SlashCommandBuilder, Client, CommandInteraction, CommandInteractionOptionResolver, EmbedBuilder, Colors } = require("discord.js");
+const { SlashCommandBuilder,MessageFlags, Client, CommandInteraction, CommandInteractionOptionResolver, EmbedBuilder, Colors } = require("discord.js");
 const { getRowifi } = require("../../../functions");
 const nbx = require("noblox.js");
 
@@ -31,7 +31,7 @@ module.exports = {
   run: async (client, interaction) => {
     try {
         // Defer the reply as this might take time
-        await interaction.deferReply({ ephemeral: false });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         
         const user = interaction.options.getUser("user");
         const id = user.id; // Extract the Discord ID from the selected user

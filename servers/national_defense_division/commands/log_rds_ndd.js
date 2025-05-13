@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, CommandInteraction, MessageFlags, CommandInteractionOptionResolver } = require('discord.js');
 const { sheets } = require('../../../utils/googleSheetsAuth');
 const config = require('../../../config.json');
-const { getRowifi } = require('../../../functions');
+const { getRowifi, interactionEmbed } = require('../../../functions');
+const { logpu } = require('../../../permissions.json').ndd;
 
 // Error handling class
 class LogQuotaError extends Error {
@@ -111,10 +112,21 @@ module.exports = {
             option.setName('notes')
                 .setDescription('Any additional notes')
                 .setRequired(true)),
-
+     /**
+    * @param {Client} client
+    * @param {CommandInteraction} interaction
+    */       
     run: async (client, interaction) => {
+       
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+
         try {
-            await interaction.deferReply({ ephemeral: true });
+
+            const hasRole = logpu.some(roleId => interaction.member.roles.cache.has(roleId));
+            if (!hasRole) {
+             return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
+             }
             // Get Roblox username from Rowifi
             const discordId = interaction.user.id;
             const rowifiResult = await getRowifi(discordId, client);
