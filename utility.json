@@ -1,0 +1,16 @@
+{
+  "ministries": [
+    {
+      "name": "National Defense Division",
+      "serverID": "980675269541134386"
+    },
+    {
+      "name": "Royal Guard",
+      "serverID": "960952766350639154"
+    },
+    {
+      "name": "Administrative Community Services",
+      "serverID": "960952766350639154"
+    }
+  ]
+}
