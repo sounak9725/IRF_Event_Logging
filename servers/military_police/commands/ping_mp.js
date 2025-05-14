@@ -13,7 +13,7 @@ module.exports = {
    */
     run: async (client, interaction) => {
         // Defer the reply to ensure we have time to measure
-        await interaction.deferReply({ ephemeral: false });
+        await interaction.deferReply();
         
         // Start timer for websocket latency measurement
         const startTime = Date.now();

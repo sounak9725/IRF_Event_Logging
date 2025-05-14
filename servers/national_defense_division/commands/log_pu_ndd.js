@@ -21,11 +21,11 @@ const ERROR_CODES = {
 };
 
 // Helper: Find next empty row
-async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 2) {
+async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 512) {
     try {
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: `${sheetName}!A${startRow}:A5000`, // Fetch column A from startRow to row 5000
+            range: `${sheetName}!A${startRow}:A1300`, // Fetch column A from startRow to row 5000
         });
 
         const values = response.data.values || [];
@@ -139,14 +139,15 @@ module.exports = {
                 );
             }
 
-            const SPREADSHEET_ID = '1HFjg2i0KiH956mdFRaoVzCNUAI5XaiNhIdh0i2bZ_fc';
-            const SHEET_NAME = 'Sheet6';
+            const SPREADSHEET_ID = '1CaDDWYTmwYbnOEAURm2eAUrHRAaGSkZpH3R5RLFBEFo';
+            const SHEET_NAME = 'PU Events';
 
-            const timestamp = new Date().toLocaleString('en-GB', {
-                day: '2-digit', month: '2-digit', year: 'numeric',
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-                hour12: false
-            });
+            const timestamp = `${new Date().toLocaleDateString('en-GB', {
+            day: '2-digit', month: '2-digit', year: 'numeric'
+            })} ${new Date().toLocaleTimeString('en-GB', {
+             hour: '2-digit', minute: '2-digit', second: '2-digit',
+             hour12: false
+            })}`;
 
             const robloxUsername = rowifiResult.username;
             const discordUsername = interaction.user.username;

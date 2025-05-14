@@ -29,7 +29,7 @@ const ERROR_CODES = {
 const RATE_LIMIT_CONFIG = {
     WINDOW: 60 * 60 * 1000, // 1 hour window
     MAX_REQUESTS: 10, // Maximum requests per window
-    COOLDOWN: 0.5 * 60 * 1000 // 5 minutes cooldown between requests
+    COOLDOWN: 1 * 60 * 1000 // 5 minutes cooldown between requests
 };
 
 // Store user request timestamps
@@ -103,12 +103,12 @@ async function handleError(interaction, error) {
 }
 
 // Fixed helper function to find the next available row in the sheet
-async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 2) {
+async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 204) {
     try {
         // Get the current data range - checking a larger range to ensure we don't miss any rows
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: spreadsheetId,
-            range: `${sheetName}!A${startRow}:A5000` // Check from startRow up to row 5000
+            range: `${sheetName}!A${startRow}:A1600` // Check from startRow up to row 5000
         });
         
         const values = response.data.values;
@@ -222,8 +222,8 @@ module.exports = {
             }
             
             // Define your spreadsheet ID
-            const SPREADSHEET_ID = '1HFjg2i0KiH956mdFRaoVzCNUAI5XaiNhIdh0i2bZ_fc';
-            const SHEET_NAME = 'Sheet5';
+            const SPREADSHEET_ID = '1CaDDWYTmwYbnOEAURm2eAUrHRAaGSkZpH3R5RLFBEFo';
+            const SHEET_NAME = 'IA Logs Form';
 
             
             // Get Roblox username from Rowifi

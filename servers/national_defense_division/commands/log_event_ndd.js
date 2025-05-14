@@ -29,7 +29,7 @@ const ERROR_CODES = {
 const RATE_LIMIT_CONFIG = {
     WINDOW: 60 * 60 * 1000, // 1 hour window
     MAX_REQUESTS: 10, // Maximum requests per window
-    COOLDOWN: 5 * 60 * 1000 // 5 minutes cooldown between requests
+    COOLDOWN: 1 * 60 * 1000 // 5 minutes cooldown between requests
 };
 
 // Store user request timestamps
@@ -105,30 +105,31 @@ async function handleError(interaction, error) {
 // Fixed helper function to find the next available row in the sheet
 async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 2) {
     try {
-        // Get the current data range - checking a larger range to ensure we don't miss any rows
+        // Get the current data range - checking column C from startRow to row 3500
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: spreadsheetId,
-            range: `${sheetName}!A${startRow}:A5000` // Check from startRow up to row 5000
+            range: `${sheetName}!C${startRow}:C3500` // Check column C
         });
-        
+
         const values = response.data.values;
-        
-        // If no values found, start at the specified row
+
+        // If no values are found, start at the specified row
         if (!values || values.length === 0) {
-            console.log(`No values found, returning startRow: ${startRow}`);
+            console.log(`No values found in column C, returning startRow: ${startRow}`);
             return startRow;
         }
-        
-        // Find the first empty row by checking for empty cells in column A
+
+        // Iterate through the rows to find the first completely empty row in column C
         for (let i = 0; i < values.length; i++) {
-            if (!values[i] || values[i].length === 0 || !values[i][0] || values[i][0].trim() === '') {
+            const cellValue = values[i]?.[0]?.trim();
+            if (!cellValue) {
                 console.log(`Found empty row at index ${i}, returning row: ${startRow + i}`);
                 return startRow + i;
             }
         }
-        
-        // If all rows have data, return the next row after the last one
-        console.log(`All rows have data, returning next row: ${startRow + values.length}`);
+
+        // If all rows in the range are filled, return the next row after the last one
+        console.log(`All rows in column C are filled, returning next row: ${startRow + values.length}`);
         return startRow + values.length;
     } catch (error) {
         console.error('Error finding next available row:', error);
@@ -140,27 +141,27 @@ async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 2) {
     }
 }
 
-// Helper function to check if a row is already filled
+// Helper function to check if a row is already filled based on column C
 async function isRowFilled(spreadsheetId, sheetName, rowNumber) {
     try {
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: spreadsheetId,
-            range: `${sheetName}!A${rowNumber}:C${rowNumber}`
+            range: `${sheetName}!C${rowNumber}:C${rowNumber}` // Check column C for the specific row
         });
-        
+
         const values = response.data.values;
         return values && values.length > 0 && values[0].some(cell => cell && cell.trim() !== '');
     } catch (error) {
-        console.error(`Error checking if row ${rowNumber} is filled:`, error);
+        console.error(`Error checking if row ${rowNumber} is filled in column C:`, error);
         return false; // Assume not filled in case of error
     }
 }
 
 module.exports = {
-    name: 'log_event',
+    name: 'log_event_ndd',
     description: 'Log an event to the quota tracking spreadsheet',
     data: new SlashCommandBuilder()
-        .setName('log_event')
+        .setName('log_event_ndd')
         .setDescription('Log an event to the quota tracking spreadsheet')
         .addStringOption(option => 
             option.setName('event_type')
@@ -244,8 +245,8 @@ module.exports = {
             }
             
             // Define your spreadsheet ID
-            const SPREADSHEET_ID = '1HFjg2i0KiH956mdFRaoVzCNUAI5XaiNhIdh0i2bZ_fc';
-            const SHEET_NAME = 'Sheet3';
+            const SPREADSHEET_ID = '1CaDDWYTmwYbnOEAURm2eAUrHRAaGSkZpH3R5RLFBEFo';
+            const SHEET_NAME = 'NDD Quota Form';
 
             
             // Get Roblox username from Rowifi
@@ -327,29 +328,33 @@ module.exports = {
                     content: `Finding proper row to insert your data...`
                 });
 
-                // Get the next available row
+                // Get the next available row based on column C
                 let nextRow = await findNextAvailableRow(SPREADSHEET_ID, SHEET_NAME, 2);
                 console.log(`Initial next available row found: ${nextRow}`);
-                
-                // Double-check that the row is actually empty
-                let maxAttempts = 5;
+
+                // Double-check that the row is actually empty in column C
+                let maxAttempts = 10; // Increase the number of attempts to ensure we find an empty row
                 let attempts = 0;
-                
+
                 while (attempts < maxAttempts) {
                     const rowFilled = await isRowFilled(SPREADSHEET_ID, SHEET_NAME, nextRow);
                     if (!rowFilled) {
-                        break; // Row is empty, we can use it
+                        break; // Row is empty in column C, we can use it
                     }
-                    
-                    console.log(`Row ${nextRow} is already filled, trying next row`);
+
+                    console.log(`Row ${nextRow} is already filled in column C, trying next row`);
                     nextRow++;
                     attempts++;
                 }
-                
+
                 if (attempts >= maxAttempts) {
-                    console.log(`Warning: Couldn't find an empty row after ${maxAttempts} attempts`);
+                    throw new LogQuotaError(
+                        'Could not find an empty row after multiple attempts.',
+                        ERROR_CODES.SHEETS_ERROR,
+                        'Please check the spreadsheet for available rows or contact an administrator.'
+                    );
                 }
-                
+
                 console.log(`Using row ${nextRow} for data insertion`);
 
                 // Write directly to the specific row
@@ -361,9 +366,9 @@ module.exports = {
                         values: [rowData]
                     }
                 });
-                
+
                 console.log(`Successfully inserted data at row ${nextRow}:`, response.status);
-                
+
                 // Create confirmation embed
                 const confirmEmbed = new EmbedBuilder()
                     .setColor('#00FF00')
@@ -382,13 +387,12 @@ module.exports = {
                     )
                     .setTimestamp()
                     .setFooter({ text: 'Your event will be reviewed by admin staff' });
-                
+
                 if (notes) {
                     confirmEmbed.addFields({ name: 'Notes for AU', value: notes, inline: false });
                 }
-                
+
                 await interaction.editReply({ content: '', embeds: [confirmEmbed] });
-                
             } catch (sheetError) {
                 console.error('Error when trying to write to sheet:', sheetError);
                 let errorMessage = "Failed to log event to Google Sheets.";
