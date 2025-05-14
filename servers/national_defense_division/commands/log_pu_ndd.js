@@ -56,11 +56,11 @@ async function isRowFilled(spreadsheetId, sheetName, rowNumber) {
 }
 
 module.exports = {
-    name: 'log_rds',
-    description: 'Log an RDS assessment to the tracking sheet',
+    name: 'log_pu_ndd',
+    description: 'Log a PU event to the tracking sheet',
     data: new SlashCommandBuilder()
-        .setName('log_rds')
-        .setDescription('Log an RDS assessment')
+        .setName('log_pu_ndd')
+        .setDescription('Log a PU event to the tracking sheet')
         .addStringOption(option =>
             option.setName('assessed_nco')
                 .setDescription('Username of the NCO you assessed')

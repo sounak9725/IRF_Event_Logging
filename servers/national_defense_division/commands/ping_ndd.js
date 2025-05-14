@@ -1,5 +1,5 @@
 /* eslint-disable no-undef */
-const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder } = require('discord.js');
 
 module.exports = {
     name: 'ping_ndd',
@@ -12,8 +12,8 @@ module.exports = {
    * @param {CommandInteraction} interaction
    */
     run: async (client, interaction) => {
-        // Defer the reply to ensure we have time to measure
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        // Defer the reply without ephemeral flag
+        await interaction.deferReply();
         
         // Start timer for websocket latency measurement
         const startTime = Date.now();

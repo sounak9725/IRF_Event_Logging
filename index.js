@@ -202,59 +202,93 @@ const { manageGuildCommands } = require('./commands_cleaning.js');
     process.on('SIGTERM', () => shutdown('SIGTERM'));
   }
   
-  // Function to load commands for a specific guild
 // Function to load commands for a specific guild
 function loadCommandsForGuild(guildId) {
-  // Find the ministry/server name from utility.json
-  const ministry = utility.ministries.find(m => m.serverID === guildId);
-  if (!ministry) {
-    console.warn(`[CMD-LOAD] No ministry found for guild ID: ${guildId}`);
-    return [];
-  }
+    const isAdminServer = guildId === config.discord.adminServerId;
 
-  // Create a safe folder name from the ministry name
-  const safeFolderName = ministry.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  const serverDir = path.join(__dirname, "servers", safeFolderName, "commands");
+    if (isAdminServer) {
+        console.log(`[CMD-LOAD] Loading all commands for admin server: ${guildId}`);
+        const commands = [];
 
-  if (!fs.existsSync(serverDir)) {
-    console.warn(`[CMD-LOAD] No commands directory found for server: ${ministry.name}`);
-    return [];
-  }
+        // Load commands from all server folders
+        const serversDir = path.join(__dirname, "servers");
+        const serverFolders = fs.readdirSync(serversDir);
 
-  console.log(`[CMD-LOAD] Loading commands for server: ${ministry.name}`);
-  const commandFiles = fs.readdirSync(serverDir).filter(file => file.endsWith('.js'));
-  const commands = [];
+        for (const folder of serverFolders) {
+            const commandsDir = path.join(serversDir, folder, "commands");
+            if (!fs.existsSync(commandsDir)) continue;
 
-  for (const file of commandFiles) {
-    try {
-      // Clear require cache to prevent potential memory leaks and stale module loads
-      const commandPath = path.join(serverDir, file);
-      delete require.cache[require.resolve(commandPath)];
-      
-      const command = require(commandPath);
-      
-      if (command.data) {
-        // Validate command structure
-        if (!command.run) {
-          console.warn(`[CMD-LOAD] Command ${file} is missing a 'run' method`);
-          continue;
+            const commandFiles = fs.readdirSync(commandsDir).filter(file => file.endsWith('.js'));
+            for (const file of commandFiles) {
+                try {
+                    const commandPath = path.join(commandsDir, file);
+                    delete require.cache[require.resolve(commandPath)];
+                    const command = require(commandPath);
+
+                    if (command.data) {
+                        if (!command.run) {
+                            console.warn(`[CMD-LOAD] Command ${file} is missing a 'run' method`);
+                            continue;
+                        }
+
+                        client.commands.set(command.data.name, command);
+                        commands.push(command.data.toJSON());
+                        console.log(`[CMD-LOAD] Loaded command: ${command.data.name} from ${folder}`);
+                    } else {
+                        console.warn(`[CMD-LOAD] Command ${file} is missing 'data' property`);
+                    }
+                } catch (error) {
+                    console.error(`[CMD-LOAD] Failed to load command from ${file} in ${folder}`, error);
+                }
+            }
         }
 
-        // Store the full command module in the client.commands collection
-        client.commands.set(command.data.name, command);
-        
-        // Convert command to JSON for deployment
-        commands.push(command.data.toJSON());
-        console.log(`[CMD-LOAD] Loaded command: ${command.data.name} for server: ${ministry.name}`);
-      } else {
-        console.warn(`[CMD-LOAD] Command ${file} is missing 'data' property`);
-      }
-    } catch (error) {
-      console.error(`[CMD-LOAD] Failed to load command from ${file} for server: ${ministry.name}`, error);
+        return commands;
     }
-  }
 
-  return commands;
+    // Default behavior for non-admin servers
+    const ministry = utility.ministries.find(m => m.serverID === guildId);
+    if (!ministry) {
+        console.warn(`[CMD-LOAD] No ministry found for guild ID: ${guildId}`);
+        return [];
+    }
+
+    const safeFolderName = ministry.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const serverDir = path.join(__dirname, "servers", safeFolderName, "commands");
+
+    if (!fs.existsSync(serverDir)) {
+        console.warn(`[CMD-LOAD] No commands directory found for server: ${ministry.name}`);
+        return [];
+    }
+
+    console.log(`[CMD-LOAD] Loading commands for server: ${ministry.name}`);
+    const commandFiles = fs.readdirSync(serverDir).filter(file => file.endsWith('.js'));
+    const commands = [];
+
+    for (const file of commandFiles) {
+        try {
+            const commandPath = path.join(serverDir, file);
+            delete require.cache[require.resolve(commandPath)];
+            const command = require(commandPath);
+
+            if (command.data) {
+                if (!command.run) {
+                    console.warn(`[CMD-LOAD] Command ${file} is missing a 'run' method`);
+                    continue;
+                }
+
+                client.commands.set(command.data.name, command);
+                commands.push(command.data.toJSON());
+                console.log(`[CMD-LOAD] Loaded command: ${command.data.name} for server: ${ministry.name}`);
+            } else {
+                console.warn(`[CMD-LOAD] Command ${file} is missing 'data' property`);
+            }
+        } catch (error) {
+            console.error(`[CMD-LOAD] Failed to load command from ${file} for server: ${ministry.name}`, error);
+        }
+    }
+
+    return commands;
 }
 
 //#region Events
@@ -290,14 +324,16 @@ client.once("ready", async () => {
     client.commands.clear();
 
     // Register commands for each guild
-   for (const guild of client.guilds.cache.values()) {
+    for (const guild of client.guilds.cache.values()) {
       const serverId = guild.id;
-      
-      // Pass the client to manageGuildCommands
-      await manageGuildCommands(client, serverId, true);
+
+      // Check if the current server is the admin server
+      const isAdminServer = serverId === config.discord.adminServerId;
 
       try {
-        const serverCommands = loadCommandsForGuild(serverId);
+        const serverCommands = isAdminServer
+          ? loadCommandsForGuild(config.discord.adminServerId) // Load all commands for the admin server
+          : loadCommandsForGuild(serverId); // Load specific commands for other servers
 
         // Only attempt to deploy if commands exist for this guild
         if (serverCommands.length > 0) {
