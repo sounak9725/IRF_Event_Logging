@@ -21,7 +21,7 @@ const ERROR_CODES = {
 };
 
 // Helper: Find next empty row
-async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 512) {
+async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 2) {
     try {
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId,
@@ -84,8 +84,7 @@ module.exports = {
                 .setRequired(true)
                 .addChoices(
                     { name: 'Combat Training', value: 'Combat Training' },
-                    { name: 'Border Simulation', value: 'Border Simulation' },
-                    { name: 'Protocol', value: 'Protocol' },
+                    { name: 'Border Simulation Protocol', value: 'Border Simulation Protocol' },
                     { name: 'Enhancement Training', value: 'Enhancement Training' },
                     { name: 'Medical Training', value: 'Medical Training' },
                     { name: 'Exam', value: 'Exam' },
@@ -166,7 +165,7 @@ module.exports = {
                 return urlRegex.test(url);
             };
 
-            if (!isValidUrl(wedgePic) || !isValidUrl(rubric)) {
+            if (!isValidUrl(wedgePic)) {
                 throw new LogQuotaError(
                     'One or more links provided are invalid.',
                     ERROR_CODES.VALIDATION_ERROR,
