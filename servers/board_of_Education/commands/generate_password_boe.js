@@ -18,7 +18,7 @@ module.exports = {
     run: async (client, interaction) => {
         try {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            const oaexam = ["1368940465402937344 ", "1115380276147798096"];
+            const oaexam = ["1368940465402937344 ", "1115380276147798096", "1115380277473185924"];
             const hasRole = oaexam.some(roleId => interaction.member.roles.cache.has(roleId));
             if (!hasRole) {
                 return interactionEmbed(3, "[ERR-UPRM]", '', interaction, client, [true, 30]);
