@@ -4,7 +4,6 @@ const axios = require('axios'); // Import axios for API calls
 const PasswordModel = require('../../../DBModels/Password'); // Import the password model
 const { interactionEmbed } = require('../../../functions');
 
-
 module.exports = {
     name: 'generate_password_boe',
     description: 'Generate the password section in the Google Form with a new password.',
@@ -19,10 +18,11 @@ module.exports = {
     run: async (client, interaction) => {
         try {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            // const hasRole = oaexam.some(roleId => interaction.member.roles.cache.has(roleId));
-            // if (!hasRole) {
-            //     return interactionEmbed(3, "[ERR-UPRM]", '', interaction, client, [true, 30]);
-            // }
+            const oaexam = ["1368940465402937344 ", "1115380276147798096"];
+            const hasRole = oaexam.some(roleId => interaction.member.roles.cache.has(roleId));
+            if (!hasRole) {
+                return interactionEmbed(3, "[ERR-UPRM]", '', interaction, client, [true, 30]);
+            }
 
             // Google Apps Script Web App URL (Replace with your actual deployment URL)
             const scriptUrl = "https://script.google.com/macros/s/AKfycbyARIDRVc0Zpikk6cp-WpbRf12zDiyzyuLPu4SW94OWck5e2Ew6cVtmnXrVMah5k52B1w/exec";
