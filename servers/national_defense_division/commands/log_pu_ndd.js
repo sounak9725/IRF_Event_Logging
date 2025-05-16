@@ -160,18 +160,6 @@ module.exports = {
             const notes = interaction.options.getString('notes');
             const commandCode = "HARD-LOG-RDS";
 
-            const isValidUrl = (url) => {
-                const urlRegex = /^(https?:\/\/[^\s$.?#].[^\s]*)$/i;
-                return urlRegex.test(url);
-            };
-
-            if (!isValidUrl(wedgePic)) {
-                throw new LogQuotaError(
-                    'One or more links provided are invalid.',
-                    ERROR_CODES.VALIDATION_ERROR,
-                    'Please make sure both the wedge picture and rubric are valid URLs.'
-                );
-            }
 
             const rowData = [
                 timestamp,
