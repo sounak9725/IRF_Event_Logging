@@ -127,8 +127,8 @@ module.exports = {
                 throw new LogQuotaError('You are being rate limited.', ERROR_CODES.RATE_LIMIT, `Please wait ${rateLimitCheck.timeLeft} ${unit}.`);
             }
 
-            const SPREADSHEET_ID = '1HFjg2i0KiH956mdFRaoVzCNUAI5XaiNhIdh0i2bZ_fc';
-            const SHEET_NAME = 'Sheet12';
+            const SPREADSHEET_ID = '1zYdsiYCQIsFidWDSmGL7U4fH6TBw_-Q1CJBzf8LubQ0';
+            const SHEET_NAME = 'Event Submissions';
 
             const rowifi = await getRowifi(interaction.user.id, client);
             if (!rowifi.success) throw new LogQuotaError('Unable to fetch your Roblox username.', ERROR_CODES.ROWIFI_ERROR, rowifi.error);
