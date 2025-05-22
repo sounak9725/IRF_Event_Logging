@@ -3,7 +3,7 @@ const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFl
 const { sheets } = require('../../../utils/googleSheetsAuth');
 const { getRowifi, interactionEmbed } = require('../../../functions');
 const config = require('../../../config.json');
-const { logevent } = require('../../../permissions.json').rg;
+const { logevent } = require('../../../permissions.json')['24thsa'];
 
 class LogQuotaError extends Error {
     constructor(message, code, details = null) {
@@ -91,30 +91,28 @@ async function isRowFilled(spreadsheetId, sheetName, rowNumber) {
 }
 
 module.exports = {
-    name: 'log_event_rg',
-    description: 'Log a Guard/Training event to the tracking sheet',
+    name: 'log_event_2sa',
+    description: 'Log a Regiment event to the quota tracking sheet',
     data: new SlashCommandBuilder()
-        .setName('log_event_rg')
-        .setDescription('Log a Guard/Training event to the sheet')
-        .addBooleanOption(option => option.setName('supervised').setDescription('Was this event supervised?').setRequired(true))
-        .addStringOption(option => option.setName('event_type').setDescription('Event type').setRequired(true).addChoices(
-            { name: 'Guarding Training', value: 'Guarding Training' },
-            { name: 'Situational Training', value: 'Situational Training' },
-            { name: 'Patrol', value: 'Patrol' },
+        .setName('log_event_2sa')
+        .setDescription('Log a Regiment event to the quota tracking sheet')
+        .addStringOption(option => option.setName('event_type').setDescription('What type of event was hosted?').setRequired(true).addChoices(
+            { name: '24th Inspection/Meeting', value: '24th Inspection/Meeting' },
             { name: 'Combat Training', value: 'Combat Training' },
             { name: 'Tryout', value: 'Tryout' },
-            { name: 'Scrim/Joint-event', value: 'Scrim/Joint-event' },
-            { name: 'Other', value: 'Other' },
-            { name: 'Etiquette Training', value: 'Etiquette Training' },
+            { name: 'Raid', value: 'Raid' },
+            { name: 'Defense Training', value: 'Defense Training' },
+            { name: 'Recruitment Session', value: 'Recruitment Session' },
+            { name: 'Discipline Training', value: 'Discipline Training' },
+            { name: 'Patrol', value: 'Patrol' },
+            { name: 'Combat Patrol', value: 'Combat Patrol' },
+            { name: 'Other', value: 'Other' }
         ))
-        .addStringOption(option => option.setName('cohosts').setDescription('Co-hosts (comma separated)').setRequired(false))
-        .addStringOption(option => option.setName('supervisor').setDescription('Supervisor username').setRequired(false))
-        .addStringOption(option => option.setName('gyazo').setDescription('Gyazo or Discord App screenshot link').setRequired(false))
-        .addStringOption(option => option.setName('attendees').setDescription('Attendees and QP (user1:5, user2:3)').setRequired(false))
-        .addIntegerOption(option => option.setName('attendee_count').setDescription('Total number of attendees').setRequired(false))
-        .addStringOption(option => option.setName('notes').setDescription('Training notes').setRequired(false))
-        .addStringOption(option => option.setName('which_event').setDescription('Name or theme of the event (IF OTHER IS CHOSEN)').setRequired(false))
-        .addIntegerOption(option => option.setName('duration').setDescription('Duration in minutes (IF OTHER IS CHOSEN)').setRequired(false)),
+        .addStringOption(option => option.setName('cohosts').setDescription('Co-host usernames (comma-separated)').setRequired(true))
+        .addStringOption(option => option.setName('attendees').setDescription('Attendees usernames (comma-separated)').setRequired(true))
+        .addStringOption(option => option.setName('proof').setDescription('Link to image/screenshot of the event').setRequired(true))
+        .addIntegerOption(option => option.setName('duration').setDescription('Total time of the event (in minutes)').setRequired(true))
+        .addStringOption(option => option.setName('notes').setDescription('Optional notes').setRequired(false)),
 
     run: async (client, interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -132,70 +130,62 @@ module.exports = {
                 throw new LogQuotaError('You are being rate limited.', ERROR_CODES.RATE_LIMIT, `Please wait ${rateLimitCheck.timeLeft} ${unit}.`);
             }
 
-            const SPREADSHEET_ID = '1LaVesC0sn62BuwyvbT-PNNlR71JG3mP2QUN0iiGdpLk';
-            const SHEET_NAME = 'Responses';
+            const SPREADSHEET_ID = '17gFnftqf5a7ncPROaIdP6iUixKKHS5T9gqp3Aqe8P8w';
+            const SHEET_NAME = 'QUOForm';
 
             const rowifi = await getRowifi(interaction.user.id, client);
             if (!rowifi.success) throw new LogQuotaError('Unable to fetch your Roblox username.', ERROR_CODES.ROWIFI_ERROR, rowifi.error);
 
             const robloxUsername = rowifi.username;
+            const discordUsername = interaction.user.username;
             const eventType = interaction.options.getString('event_type');
             const cohosts = interaction.options.getString('cohosts');
-            const supervisor = interaction.options.getString('supervisor');
-            const gyazo = interaction.options.getString('gyazo');
-            const attendees = interaction.options.getString('attendees');
-            const attendeeCount = interaction.options.getInteger('attendee_count');
-            const notes = interaction.options.getString('notes');
-            const whichEvent = interaction.options.getString('which_event');
+            const attendeesRaw = interaction.options.getString('attendees');
+            const proof = interaction.options.getString('proof');
             const duration = interaction.options.getInteger('duration');
-            const supervised = interaction.options.getBoolean('supervised') ? 'Yes' : 'No';
+            const notes = interaction.options.getString('notes') || 'N/A';
 
-            // **Validation for "Other" Event Type**
-            if (eventType === 'Other') {
-                if (!whichEvent || !duration) {
-                    throw new LogQuotaError(
-                        'Validation Error',
-                        ERROR_CODES.VALIDATION_ERROR,
-                        'When "Other" is selected as the event type, "which_event" and "duration" are required.'
-                    );
-                }
-
-                if (cohosts || supervisor || gyazo || attendees || attendeeCount || notes) {
-                    throw new LogQuotaError(
-                        'Validation Error',
-                        ERROR_CODES.VALIDATION_ERROR,
-                        'When "Other" is selected as the event type, only "which_event" and "duration" are allowed.'
-                    );
-                }
-            }
-             // **Validation for Supervised Events**
-             if (supervised === 'Yes' && !supervisor) {
+            // --- Attendees validation and count ---
+            // Valid format: name, name, name (no trailing comma, single space after comma)
+            const attendeesPattern = /^([a-zA-Z0-9_]+)(, [a-zA-Z0-9_]+)*$/;
+            if (!attendeesPattern.test(attendeesRaw.trim())) {
                 throw new LogQuotaError(
-                'Validation Error',
-                ERROR_CODES.VALIDATION_ERROR,
-                'When the event is supervised, the supervisor name must be provided.'
+                    'Invalid attendees format.',
+                    ERROR_CODES.VALIDATION_ERROR,
+                    'Attendees must be a comma and space separated list, e.g.: macy, suman, larz, kiler, etc.'
                 );
-             }
+            }
+            // Count attendees
+            const attendeesList = attendeesRaw.split(',').map(name => name.trim()).filter(Boolean);
+            const attendeeCount = attendeesList.length;
 
-            const timestamp = new Date().toLocaleString('en-GB', {
-                day: '2-digit', month: '2-digit', year: 'numeric',
-                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+            const now = new Date();
+            const formattedDate = now.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: '2-digit', 
+                year: 'numeric'
             });
+            const formattedTime = now.toLocaleTimeString('en-GB', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+            const timestamp = `${formattedDate} ${formattedTime}`;
 
             const rowData = [
+                '',
+                '',
                 timestamp,
-                supervised,
                 robloxUsername,
-                supervisor,
-                cohosts,
+                discordUsername,
                 eventType,
-                gyazo,
-                'HARDCODED', // File screenshot placeholder
-                attendees,
-                attendeeCount ? attendeeCount.toString() : '',
-                notes,
-                whichEvent,
-                duration ? duration.toString() : ''
+                cohosts,
+                attendeesRaw,
+                attendeeCount.toString(),
+                proof,
+                duration.toString(),
+                notes
             ];
 
             let nextRow = await findNextAvailableRow(SPREADSHEET_ID, SHEET_NAME);
@@ -204,7 +194,7 @@ module.exports = {
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: SPREADSHEET_ID,
-                range: `${SHEET_NAME}!A${nextRow}:M${nextRow}`,
+                range: `${SHEET_NAME}!A${nextRow}:L${nextRow}`,
                 valueInputOption: 'USER_ENTERED',
                 resource: { values: [rowData] }
             });
@@ -214,21 +204,16 @@ module.exports = {
                 .setTitle('✅ Event Logged')
                 .addFields(
                     { name: 'Host', value: robloxUsername, inline: true },
-                    { name: 'Supervised?', value: supervised, inline: true },
+                    { name: 'Discord Username', value: discordUsername, inline: true },
                     { name: 'Event Type', value: eventType, inline: true },
-                    { name: 'Attendees', value: attendeeCount ? attendeeCount.toString() : 'N/A', inline: true },
-                    { name: 'Duration (min)', value: duration ? duration.toString() : 'N/A', inline: true },
-                    { name: 'Proof', value: gyazo ? `[Gyazo](${gyazo})` : 'N/A', inline: false },
+                    { name: 'Co-hosts', value: cohosts, inline: true },
+                    { name: 'Attendees', value: attendeeCount.toString(), inline: true },
+                    { name: 'Duration (min)', value: duration.toString(), inline: true },
+                    { name: 'Proof', value: `[View Screenshot](${proof})`, inline: false },
                     { name: 'Notes', value: notes || 'N/A', inline: false }
                 )
                 .setTimestamp()
                 .setFooter({ text: 'Event successfully recorded.' });
-
-            if (eventType === 'Other') {
-                embed.addFields(
-                    { name: 'Event Name/Theme', value: whichEvent || 'N/A', inline: false }
-                );
-            }
 
             await interaction.editReply({ embeds: [embed] });
         } catch (error) {
