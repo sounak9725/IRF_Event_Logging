@@ -17,6 +17,7 @@ class LogQuotaError extends Error {
 const ERROR_CODES = {
     VALIDATION_ERROR: 'ERR-VALIDATION',
     SHEETS_ERROR: 'ERR-SHEETS',
+    ROWIFI_ERROR: 'ERR-ROWIFI', // Added missing error code
     UNKNOWN_ERROR: 'ERR-UNKNOWN',
 };
 
@@ -119,13 +120,12 @@ module.exports = {
        
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-
         try {
-
             const hasRole = logpu.some(roleId => interaction.member.roles.cache.has(roleId));
             if (!hasRole) {
-             return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
-             }
+                return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
+            }
+
             // Get Roblox username from Rowifi
             const discordId = interaction.user.id;
             const rowifiResult = await getRowifi(discordId, client);
@@ -142,10 +142,10 @@ module.exports = {
             const SHEET_NAME = 'PU Events';
 
             const timestamp = `${new Date().toLocaleDateString('en-GB', {
-            day: '2-digit', month: '2-digit', year: 'numeric'
+                day: '2-digit', month: '2-digit', year: 'numeric'
             })} ${new Date().toLocaleTimeString('en-GB', {
-             hour: '2-digit', minute: '2-digit', second: '2-digit',
-             hour12: false
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: false
             })}`;
 
             const robloxUsername = rowifiResult.username;
@@ -159,7 +159,6 @@ module.exports = {
             const rubric = interaction.options.getString('rubric');
             const notes = interaction.options.getString('notes');
             const commandCode = "HARD-LOG-RDS";
-
 
             const rowData = [
                 timestamp,

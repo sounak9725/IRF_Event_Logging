@@ -91,11 +91,11 @@ async function isRowFilled(spreadsheetId, sheetName, rowNumber) {
 }
 
 module.exports = {
-    name: 'log_event_stavka',
-    description: 'Log an STAVKA Command event to the database',
+    name: 'log_event_isoc',
+    description: 'Log an ISOC Command event to the database',
     data: new SlashCommandBuilder()
-        .setName('log_event_stavka')
-        .setDescription('Log an STAVKA event')
+        .setName('log_event_isoc')
+        .setDescription('Log an ISOC event')
         .addStringOption(option => option.setName('event_type').setDescription('Select the event type').setRequired(true).addChoices(
             { name: 'Tryout', value: 'Tryout' },
             { name: 'Raid/Defense', value: 'Raid/Defense' },
