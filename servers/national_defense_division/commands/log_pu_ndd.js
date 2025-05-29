@@ -94,8 +94,12 @@ module.exports = {
                 ))
         .addStringOption(option =>
             option.setName('result')
-                .setDescription('Result of the assessment (Pass/Fail/etc.)')
-                .setRequired(true))
+                .setDescription('Result of the assessment')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Pass', value: 'Pass' },
+                    { name: 'Fail', value: 'Fail' }
+                ))
         .addStringOption(option =>
             option.setName('score')
                 .setDescription('Score (number in 75/100 format not anything else)')
@@ -205,7 +209,11 @@ module.exports = {
                     { name: 'Type of Event', value: eventType, inline: true },
                     { name: 'Result', value: result, inline: true },
                     { name: 'Score', value: score, inline: true },
-                    { name: 'Rubric', value: `[View Rubric](${rubric})`, inline: false },
+                    { 
+                        name: 'Rubric', 
+                        value: rubric.length > 1024 ? rubric.slice(0, 1021) + '...' : rubric, 
+                        inline: false 
+                    },
                     { name: 'Wedge Screenshot', value: `[View Screenshot](${wedgePic})`, inline: false },
                     { name: 'Command Code', value: commandCode, inline: true },
                     { name: 'Notes', value: notes || 'N/A', inline: false }
