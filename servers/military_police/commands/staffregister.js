@@ -102,37 +102,78 @@ module.exports = {
             return await interaction.editReply({ embeds: [embed], ephemeral: ephemeral });
         }
 
-        // Get Roblox user information
+        // Get Roblox user information with exponential backoff
         const robloxUserId = rowifi.roblox;
-        const robloxUserInfo = await nbx.getPlayerInfo(robloxUserId);
-        const robloxUsername = robloxUserInfo.username;
+        let robloxUsername = "Unknown";
 
-        // Get user's rank in the MP group
+        try {
+            // Use exponential backoff for username retrieval
+            robloxUsername = await exponentialBackoff(async () => {
+                return await nbx.getUsernameFromId(robloxUserId);
+            }, 3);
+        } catch (usernameError) {
+            console.warn("Failed to get username after retries, using fallback:", usernameError.message);
+            robloxUsername = `User_${robloxUserId}`; // Use ID as fallback
+        }
+
+        // Exponential backoff utility function
+        const exponentialBackoff = async (fn, maxRetries = 3) => {
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                try {
+                    return await fn();
+                } catch (error) {
+                    if (attempt === maxRetries) {
+                        throw error;
+                    }
+                    
+                    // Check if it's a rate limit error (429) or network error
+                    const isRetryableError = error.message && (
+                        error.message.includes('429') || 
+                        error.message.includes('Too many requests') ||
+                        error.message.includes('ECONNRESET') ||
+                        error.message.includes('timeout')
+                    );
+                    
+                    if (!isRetryableError) {
+                        throw error; // Don't retry non-retryable errors
+                    }
+                    
+                    // Calculate delay: 2^attempt * 1000ms (1s, 2s, 4s, 8s...)
+                    const delay = Math.pow(2, attempt) * 1000;
+                    console.log(`Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        };
+
+        // Get user's rank in the MP group with exponential backoff - but set as N/A if it fails
         let mpRank = "N/A";
         let rankId = 0;
 
         try {
-            rankId = await nbx.getRankInGroup(mpGroupId, robloxUserId);
-            if (rankId > 0) {
-                const rankName = await nbx.getRankNameInGroup(mpGroupId, robloxUserId);
-                mpRank = rankName;
-            } else {
-                mpRank = "N/A"; // Not in group, set as N/A
-            }
+            // Try to get rank with exponential backoff, but don't let it block registration
+            await exponentialBackoff(async () => {
+                rankId = await nbx.getRankInGroup(mpGroupId, robloxUserId);
+                if (rankId > 0) {
+                    const rankName = await nbx.getRankNameInGroup(mpGroupId, robloxUserId);
+                    mpRank = rankName;
+                }
+            }, 2); // Only 2 retries to avoid long delays
         } catch (error) {
-            console.error("Error fetching MP rank:", error);
+            console.warn("Failed to retrieve MP rank after retries, setting as N/A:", error.message);
             mpRank = "N/A";
             rankId = 0;
+            // Continue with registration regardless of rank fetch failure
         }
 
-        // Create new staff verification entry
+        // Create new staff verification entry - always set verification_status as 'pending' since rank is N/A
         const newStaffMember = new StaffVerification({
             email: email.toLowerCase().trim(),
             discord_user_id: discordId,
             discord_username: discordUsername,
             roblox_username: robloxUsername,
-            military_police_rank: mpRank,
-            verification_status: rankId > 0 ? 'verified' : 'pending',
+            military_police_rank: mpRank, // Will always be "N/A" with this approach
+            verification_status: 'pending', // Always pending since we're not relying on rank verification
             verified_by: interaction.user.id
         });
 
@@ -161,16 +202,16 @@ module.exports = {
                 },
                 {
                     name: "Military Police Rank",
-                    value: `**Rank:** ${mpRank}\n**Status:** ${rankId > 0 ? '✅ Verified' : 'N/A'}`,
+                    value: `**Rank:** ${mpRank}\n**Status:** Pending Manual Verification`,
                     inline: false
                 },
                 {
                     name: "Database Information",
-                    value: `**Member ID:** ${newStaffMember.member_id}\n**Registered by:** <@${interaction.user.id}>`,
+                    value: `**Member ID:** ${newStaffMember.member_id}\n**Registered by:** <@${interaction.user.id}>\n**Status:** Pending`,
                     inline: false
                 }
             ],
-            color: rankId > 0 ? Colors.Green : Colors.Yellow,
+            color: Colors.Yellow, // Always yellow since status is always pending
             footer: {
                 text: `⚠ MP - Secure Transmission at ${new Date().toLocaleTimeString()} ${new Date().toString().match(/GMT([+-]\d{2})(\d{2})/)[0]}`,
                 iconURL: client.user.displayAvatarURL()
@@ -184,19 +225,43 @@ module.exports = {
             });
         }
 
+        // Add a note if we encountered rate limiting but still succeeded
+        if (robloxUsername.startsWith('User_') || mpRank === "N/A") {
+            embed.addFields({
+                name: "⚠️ Note",
+                value: "Some information may be limited due to API rate limiting. The registration was still successful.",
+                inline: false
+            });
+        }
+
         // Edit the deferred reply
         await interaction.editReply({ embeds: [embed], ephemeral: ephemeral });
 
     } catch (error) {
         console.error("Staff registration error:", error);
         
+        // More detailed error handling
+        let errorDescription = "❌ An error occurred while processing the staff registration.";
+        let errorDetails = error.message || "Unknown error occurred";
+        
+        // Check if it's a rate limiting error
+        if (error.message && error.message.includes('429')) {
+            errorDescription = "❌ Registration failed due to Roblox API rate limiting.";
+            errorDetails = "The bot is making too many requests to Roblox. Please wait a few minutes and try again.";
+        }
+        
         const errorEmbed = new EmbedBuilder({
             title: "Registration Error",
-            description: "❌ An error occurred while processing the staff registration.",
+            description: errorDescription,
             fields: [
                 {
                     name: "Error Details",
-                    value: error.message || "Unknown error occurred",
+                    value: errorDetails,
+                    inline: false
+                },
+                {
+                    name: "Suggested Actions",
+                    value: "• Wait 2-3 minutes before retrying\n• Check if the user is properly linked with RoWifi\n• Verify the user exists on Roblox",
                     inline: false
                 }
             ],
