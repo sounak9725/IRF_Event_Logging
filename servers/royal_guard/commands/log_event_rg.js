@@ -159,21 +159,15 @@ module.exports = {
                         'When "Other" is selected as the event type, "which_event" and "duration" are required.'
                     );
                 }
-
-                if (cohosts || supervisor || gyazo || attendees || attendeeCount || notes) {
-                    throw new LogQuotaError(
-                        'Validation Error',
-                        ERROR_CODES.VALIDATION_ERROR,
-                        'When "Other" is selected as the event type, only "which_event" and "duration" are allowed.'
-                    );
-                }
+                // No restriction on other fields!
             }
+
              // **Validation for Supervised Events**
              if (supervised === 'Yes' && !supervisor) {
                 throw new LogQuotaError(
-                'Validation Error',
-                ERROR_CODES.VALIDATION_ERROR,
-                'When the event is supervised, the supervisor name must be provided.'
+                    'Validation Error',
+                    ERROR_CODES.VALIDATION_ERROR,
+                    'When the event is supervised, the supervisor name must be provided.'
                 );
              }
 
