@@ -17,9 +17,13 @@ class LogQuotaError extends Error {
 const ERROR_CODES = {
     VALIDATION_ERROR: 'ERR-VALIDATION',
     SHEETS_ERROR: 'ERR-SHEETS',
-    ROWIFI_ERROR: 'ERR-ROWIFI', // Added missing error code
+    ROWIFI_ERROR: 'ERR-ROWIFI',
+    PERMISSION_ERROR: 'ERR-PERMISSION',
     UNKNOWN_ERROR: 'ERR-UNKNOWN',
 };
+
+// Role ID for Chief Defense Specialist+ (can only log co-host events)
+const CHIEF_DEFENSE_SPECIALIST_ROLE_ID = '1292169163816566866';
 
 // Helper: Find next empty row
 async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 2) {
@@ -125,9 +129,25 @@ module.exports = {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         try {
-            const hasRole = logpu.some(roleId => interaction.member.roles.cache.has(roleId));
-            if (!hasRole) {
+            // Check permissions
+            const hasFullPermission = logpu.some(roleId => interaction.member.roles.cache.has(roleId));
+            const hasChiefDefenseSpecialistRole = interaction.member.roles.cache.has(CHIEF_DEFENSE_SPECIALIST_ROLE_ID);
+            
+            // User must have either full permission or Chief Defense Specialist+ role
+            if (!hasFullPermission && !hasChiefDefenseSpecialistRole) {
                 return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
+            }
+
+            // Get the selected RDS stage
+            const rdsStage = interaction.options.getString('rds_stage');
+            
+            // If user only has Chief Defense Specialist role, they can only log Co-Host events
+            if (!hasFullPermission && hasChiefDefenseSpecialistRole && rdsStage !== 'Co-Host') {
+                throw new LogQuotaError(
+                    'You can only log Co-Host events with your current permissions.',
+                    ERROR_CODES.PERMISSION_ERROR,
+                    'Chief Defense Specialist+ role holders are restricted to Co-Host event logging only.'
+                );
             }
 
             // Get Roblox username from Rowifi
@@ -155,7 +175,6 @@ module.exports = {
             const robloxUsername = rowifiResult.username;
             const discordUsername = interaction.user.username;
             const assessedNCO = interaction.options.getString('assessed_nco');
-            const rdsStage = interaction.options.getString('rds_stage');
             const eventType = interaction.options.getString('type_of_event');
             const result = interaction.options.getString('result');
             const score = interaction.options.getString('score');
@@ -235,6 +254,8 @@ module.exports = {
                 embed.addFields({ name: 'Details', value: error.details || 'Invalid input provided.' });
             } else if (error.code === ERROR_CODES.ROWIFI_ERROR) {
                 embed.addFields({ name: 'Details', value: error.details || 'Unable to fetch Roblox username from RoWifi.' });
+            } else if (error.code === ERROR_CODES.PERMISSION_ERROR) {
+                embed.addFields({ name: 'Details', value: error.details || 'You do not have permission to log this type of event.' });
             }
 
             console.error(error);
