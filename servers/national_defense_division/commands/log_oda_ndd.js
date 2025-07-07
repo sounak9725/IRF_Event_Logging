@@ -29,7 +29,7 @@ const ERROR_CODES = {
 const RATE_LIMIT_CONFIG = {
     WINDOW: 60 * 60 * 1000, // 1 hour window
     MAX_REQUESTS: 10, // Maximum requests per window
-    COOLDOWN: 1 * 60 * 1000 // 5 minutes cooldown between requests
+    COOLDOWN: 1 * 60 * 1000 // 1 minute cooldown between requests
 };
 
 // Store user request timestamps
@@ -40,32 +40,33 @@ function checkRateLimit(userId) {
     const now = Date.now();
     const userRequests = userRequestsMap.get(userId) || [];
     
-    // Clean up old requests
+    // Clean up old requests (remove requests older than the window)
     const recentRequests = userRequests.filter(time => now - time < RATE_LIMIT_CONFIG.WINDOW);
     
-    // Check if user has exceeded rate limit
-    if (recentRequests.length >= RATE_LIMIT_CONFIG.MAX_REQUESTS) {
-        const oldestRequest = recentRequests[0];
-        const timeLeft = Math.ceil((RATE_LIMIT_CONFIG.WINDOW - (now - oldestRequest)) / 1000 / 60);
-        return {
-            allowed: false,
-            timeLeft: timeLeft,
-            isCooldown: false
-        };
-    }
-    
-    // Check cooldown
+    // Check cooldown first (if there was a recent request)
     if (recentRequests.length > 0) {
-        const lastRequest = recentRequests[recentRequests.length - 1];
+        const lastRequest = Math.max(...recentRequests); // Get the most recent request
         const timeSinceLastRequest = now - lastRequest;
+        
         if (timeSinceLastRequest < RATE_LIMIT_CONFIG.COOLDOWN) {
-            const timeLeft = Math.ceil((RATE_LIMIT_CONFIG.COOLDOWN - timeSinceLastRequest) / 1000);
+            const timeLeft = Math.ceil((RATE_LIMIT_CONFIG.COOLDOWN - timeSinceLastRequest) / 1000 / 60);
             return {
                 allowed: false,
                 timeLeft: timeLeft,
                 isCooldown: true
             };
         }
+    }
+    
+    // Check if user has exceeded rate limit
+    if (recentRequests.length >= RATE_LIMIT_CONFIG.MAX_REQUESTS) {
+        const oldestRequest = Math.min(...recentRequests);
+        const timeLeft = Math.ceil((RATE_LIMIT_CONFIG.WINDOW - (now - oldestRequest)) / 1000 / 60);
+        return {
+            allowed: false,
+            timeLeft: timeLeft,
+            isCooldown: false
+        };
     }
     
     // Update user requests
