@@ -172,10 +172,10 @@ async function safeReply(interaction, options) {
 }
 
 module.exports = {
-    name: 'log_event_multi',
+    name: 'log_event_98th',
     description: 'Log an event for 98th, 120th, or 45th wing to the quota tracking spreadsheet',
     data: new SlashCommandBuilder()
-        .setName('log_event_multi')
+        .setName('log_event_98th')
         .setDescription('Log an event for 98th, 120th, or 45th wing to the quota tracking spreadsheet')
         // Required options
         .addStringOption(option => 
@@ -196,8 +196,8 @@ module.exports = {
                 .setRequired(true)
                 .addChoices(
                     { name: '98th Airborne Division', value: '98th Airborne Division' },
-                    { name: '45. Airborne Assault Wing', value: '45. Airborne Assault Wing' },
-                    { name: 'Flight Investigations Unit', value: 'Flight Investigations Unit' },
+                    { name: '45th Special Operations Wing', value: '45th Special Operations Wing' },
+                    { name: '120th Elite Fighters Wing', value: '120th Elite Fighters Wing' },
                     { name: 'Training & Logistics Wing', value: 'Training & Logistics Wing' }
                 ))
         // Optional wing-specific event types
@@ -254,18 +254,6 @@ module.exports = {
         .addStringOption(option => 
             option.setName('notes')
                 .setDescription('Additional notes (optional)')
-                .setRequired(false))
-        .addStringOption(option => 
-            option.setName('verrus_points_1')
-                .setDescription('Personnel who earned 1 Verrus point (optional)')
-                .setRequired(false))
-        .addStringOption(option => 
-            option.setName('verrus_points_3')
-                .setDescription('Personnel who earned 3 Verrus points (optional)')
-                .setRequired(false))
-        .addStringOption(option => 
-            option.setName('verrus_points_5')
-                .setDescription('Personnel who earned 5 Verrus points (optional)')
                 .setRequired(false)),
 
     /**
@@ -299,8 +287,8 @@ module.exports = {
             }
             
             // Define spreadsheet details
-            const SPREADSHEET_ID = '1HFjg2i0KiH956mdFRaoVzCNUAI5XaiNhIdh0i2bZ_fc';
-            const SHEET_NAME = 'Sheet14';
+            const SPREADSHEET_ID = '1HUdLwvOTZB8IggkST-P87y9ikX15zo1crFvg2sN0yNY';
+            const SHEET_NAME = 'Events';
 
             // Get Roblox username from Rowifi
             const discordId = interaction.user.id;
@@ -323,9 +311,6 @@ module.exports = {
             const hostedFor = interaction.options.getString('hosted_for');
             const recruitedPersonnel = interaction.options.getString('recruited_personnel') || '';
             const notes = interaction.options.getString('notes') || '';
-            const verrusPoints1 = interaction.options.getString('verrus_points_1') || '';
-            const verrusPoints3 = interaction.options.getString('verrus_points_3') || '';
-            const verrusPoints5 = interaction.options.getString('verrus_points_5') || '';
             
             // Get event type options
             const eventType98th = interaction.options.getString('event_type_98th');
@@ -363,12 +348,11 @@ module.exports = {
             }
             
             // Validate recruited personnel requirement for tryout events
-            const isTryoutEvent = (
+            const isTryoutEvent =
                 (eventType98th && eventType98th === 'Tryout/Recruitment Session') ||
                 (eventType120th && eventType120th === '120th Tryout') ||
-                (eventType45th && eventType45th === '45th Tryout')
-            );
-            
+                (eventType45th && eventType45th === '45th Tryout');
+
             if (isTryoutEvent && !recruitedPersonnel) {
                 throw new LogQuotaError(
                     'Recruited personnel required for tryout events',
@@ -419,9 +403,9 @@ module.exports = {
                 recruitedPersonnel,                                // K - Recruited Personnel
                 notes,                                             // L - Notes
                 endingScreenshot,                                  // M - Ending Screenshot
-                verrusPoints1,                                     // N - 1 Verrus Points
-                verrusPoints3,                                     // O - 3 Verrus Points
-                verrusPoints5                                      // P - 5 Verrus Points
+                '',                                                // N - 1 Verrus Points (to be filled later)
+                '',                                                // O - 3 Verrus Points (to be filled later)          
+                ''                                                 // P - 5 Verrus Points (to be filled later)
             ];
             
             try {
@@ -494,16 +478,6 @@ module.exports = {
                     confirmEmbed.addFields({ name: 'Notes', value: notes, inline: false });
                 }
 
-                // Add Verrus Points fields if any were awarded
-                if (verrusPoints1) {
-                    confirmEmbed.addFields({ name: '1 Verrus Point Recipients', value: verrusPoints1, inline: true });
-                }
-                if (verrusPoints3) {
-                    confirmEmbed.addFields({ name: '3 Verrus Points Recipients', value: verrusPoints3, inline: true });
-                }
-                if (verrusPoints5) {
-                    confirmEmbed.addFields({ name: '5 Verrus Points Recipients', value: verrusPoints5, inline: true });
-                }
 
                 await interaction.editReply({ content: '', embeds: [confirmEmbed] });
             } catch (sheetError) {
