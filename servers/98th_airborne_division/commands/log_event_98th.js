@@ -109,7 +109,7 @@ async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 2) {
         // Get the current data range - checking column A (Timestamp) from startRow to row 3500
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: spreadsheetId,
-            range: `${sheetName}!A${startRow}:A3500`
+            range: `${sheetName}!A${startRow}:A11000`
         });
 
         const values = response.data.values;
