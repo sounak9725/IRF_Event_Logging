@@ -172,30 +172,16 @@ async function safeReply(interaction, options) {
 }
 
 module.exports = {
-    name: 'log_event_98th',
-    description: 'Log a 98th Airborne Division event to the quota tracking spreadsheet',
+    name: 'log_event_multi',
+    description: 'Log an event for 98th, 120th, or 45th wing to the quota tracking spreadsheet',
     data: new SlashCommandBuilder()
-        .setName('log_event_98th')
-        .setDescription('Log a 98th Airborne Division event to the quota tracking spreadsheet')
-        // All required options FIRST
+        .setName('log_event_multi')
+        .setDescription('Log an event for 98th, 120th, or 45th wing to the quota tracking spreadsheet')
+        // Required options
         .addStringOption(option => 
             option.setName('attendee_names')
                 .setDescription('Attendee usernames (space separated)')
                 .setRequired(true))
-        .addStringOption(option => 
-            option.setName('event_type_98th')
-                .setDescription('Type of 98th event you hosted')
-                .setRequired(true)
-                .addChoices(
-                    { name: 'Tryout/Recruitment Session', value: 'Tryout/Recruitment Session' },
-                    { name: 'Patrol', value: 'Patrol' },
-                    { name: 'Flight Training', value: 'Flight Training' },
-                    { name: 'Assault Training', value: 'Assault Training' },
-                    { name: 'Combat Training', value: 'Combat Training' },
-                    { name: 'Combat Mission', value: 'Combat Mission' },
-                    { name: 'Raid', value: 'Raid' },
-                    { name: 'Misc/Special Event', value: 'Misc/Special Event' }
-                ))
         .addIntegerOption(option => 
             option.setName('event_duration')
                 .setDescription('Total time of the event (in minutes)')
@@ -213,8 +199,74 @@ module.exports = {
                     { name: '45. Airborne Assault Wing', value: '45. Airborne Assault Wing' },
                     { name: 'Flight Investigations Unit', value: 'Flight Investigations Unit' },
                     { name: 'Training & Logistics Wing', value: 'Training & Logistics Wing' }
-                )
-        ),
+                ))
+        // Optional wing-specific event types
+        .addStringOption(option => 
+            option.setName('event_type_98th')
+                .setDescription('Type of 98th event (select only if logging 98th event)')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'Tryout/Recruitment Session', value: 'Tryout/Recruitment Session' },
+                    { name: 'Patrol', value: 'Patrol' },
+                    { name: 'Flight Training', value: 'Flight Training' },
+                    { name: 'Assault Training', value: 'Assault Training' },
+                    { name: 'Combat Training', value: 'Combat Training' },
+                    { name: 'Combat Mission', value: 'Combat Mission' },
+                    { name: 'Raid', value: 'Raid' },
+                    { name: 'Misc/Special Event', value: 'Misc/Special Event' }
+                ))
+        .addStringOption(option => 
+            option.setName('event_type_120th')
+                .setDescription('Type of 120th event (select only if logging 120th event)')
+                .setRequired(false)
+                .addChoices(
+                    { name: '120th Tryout', value: '120th Tryout' },
+                    { name: 'Aerial Combat Session', value: 'Aerial Combat Session' },
+                    { name: 'Aerial Bombing Training', value: 'Aerial Bombing Training' },
+                    { name: 'Aerial Formations Training', value: 'Aerial Formations Training' },
+                    { name: 'Simulations Training', value: 'Simulations Training' },
+                    { name: '120th Scrim', value: '120th Scrim' },
+                    { name: 'Evaluation', value: 'Evaluation' },
+                    { name: '120th Patrol', value: '120th Patrol' }
+                ))
+        .addStringOption(option => 
+            option.setName('event_type_45th')
+                .setDescription('Type of 45th event (select only if logging 45th event)')
+                .setRequired(false)
+                .addChoices(
+                    { name: '45th Tryout', value: '45th Tryout' },
+                    { name: 'Paratrooper Training', value: 'Paratrooper Training' },
+                    { name: 'Defense Training', value: 'Defense Training' },
+                    { name: 'Aim Improvement Training', value: 'Aim Improvement Training' },
+                    { name: '45th Patrol', value: '45th Patrol' },
+                    { name: '45th Scrim', value: '45th Scrim' },
+                    { name: 'Misc/Special Event', value: 'Misc/Special Event' }
+                ))
+        // Additional optional fields
+        .addStringOption(option => 
+            option.setName('co_host')
+                .setDescription('Co-host username (optional)')
+                .setRequired(false))
+        .addStringOption(option => 
+            option.setName('recruited_personnel')
+                .setDescription('Recruited personnel (required only for tryout/recruitment events)')
+                .setRequired(false))
+        .addStringOption(option => 
+            option.setName('notes')
+                .setDescription('Additional notes (optional)')
+                .setRequired(false))
+        .addStringOption(option => 
+            option.setName('verrus_points_1')
+                .setDescription('Personnel who earned 1 Verrus point (optional)')
+                .setRequired(false))
+        .addStringOption(option => 
+            option.setName('verrus_points_3')
+                .setDescription('Personnel who earned 3 Verrus points (optional)')
+                .setRequired(false))
+        .addStringOption(option => 
+            option.setName('verrus_points_5')
+                .setDescription('Personnel who earned 5 Verrus points (optional)')
+                .setRequired(false)),
 
     /**
     * @param {Client} client
@@ -225,7 +277,7 @@ module.exports = {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         try {
-            // Check permissions (adjust the permission check as needed)
+            // Check permissions
             const hasRole = logevent.some(roleId => interaction.member.roles.cache.has(roleId));
             if (!hasRole) {
                 await safeReply(interaction, {
@@ -246,9 +298,9 @@ module.exports = {
                 );
             }
             
-            // Define your spreadsheet ID and sheet name
-            const SPREADSHEET_ID = '1HFjg2i0KiH956mdFRaoVzCNUAI5XaiNhIdh0i2bZ_fc'; // Replace with actual spreadsheet ID
-            const SHEET_NAME = 'Sheet14'; // Based on your CSV file name
+            // Define spreadsheet details
+            const SPREADSHEET_ID = '1HFjg2i0KiH956mdFRaoVzCNUAI5XaiNhIdh0i2bZ_fc';
+            const SHEET_NAME = 'Sheet14';
 
             // Get Roblox username from Rowifi
             const discordId = interaction.user.id;
@@ -262,19 +314,68 @@ module.exports = {
                 );
             }
             
-            // Get input values from the command
+            // Get input values
             const hostUsername = rowifiResult.username;
             const coHost = interaction.options.getString('co_host') || '';
             const attendeeNames = interaction.options.getString('attendee_names');
-            const eventType98th = interaction.options.getString('event_type_98th');
             const eventDuration = interaction.options.getInteger('event_duration');
+            const endingScreenshot = interaction.options.getString('ending_screenshot');
+            const hostedFor = interaction.options.getString('hosted_for');
             const recruitedPersonnel = interaction.options.getString('recruited_personnel') || '';
             const notes = interaction.options.getString('notes') || '';
-            const endingScreenshot = interaction.options.getString('ending_screenshot');
             const verrusPoints1 = interaction.options.getString('verrus_points_1') || '';
             const verrusPoints3 = interaction.options.getString('verrus_points_3') || '';
             const verrusPoints5 = interaction.options.getString('verrus_points_5') || '';
-            const hostedFor = interaction.options.getString('hosted_for');
+            
+            // Get event type options
+            const eventType98th = interaction.options.getString('event_type_98th');
+            const eventType120th = interaction.options.getString('event_type_120th');
+            const eventType45th = interaction.options.getString('event_type_45th');
+            
+            // Validation: Ensure exactly one event type is selected
+            const eventTypes = [eventType98th, eventType120th, eventType45th].filter(Boolean);
+            if (eventTypes.length === 0) {
+                throw new LogQuotaError(
+                    'No event type selected',
+                    ERROR_CODES.VALIDATION_ERROR,
+                    'Please select exactly one event type (98th, 120th, or 45th)'
+                );
+            }
+            if (eventTypes.length > 1) {
+                throw new LogQuotaError(
+                    'Multiple event types selected',
+                    ERROR_CODES.VALIDATION_ERROR,
+                    'Please select only one event type (98th, 120th, or 45th)'
+                );
+            }
+            
+            // Determine the selected event type and value
+            let selectedEventType, selectedEventValue;
+            if (eventType98th) {
+                selectedEventType = '98th';
+                selectedEventValue = eventType98th;
+            } else if (eventType120th) {
+                selectedEventType = '120th';
+                selectedEventValue = eventType120th;
+            } else if (eventType45th) {
+                selectedEventType = '45th';
+                selectedEventValue = eventType45th;
+            }
+            
+            // Validate recruited personnel requirement for tryout events
+            const isTryoutEvent = (
+                (eventType98th && eventType98th === 'Tryout/Recruitment Session') ||
+                (eventType120th && eventType120th === '120th Tryout') ||
+                (eventType45th && eventType45th === '45th Tryout')
+            );
+            
+            if (isTryoutEvent && !recruitedPersonnel) {
+                throw new LogQuotaError(
+                    'Recruited personnel required for tryout events',
+                    ERROR_CODES.VALIDATION_ERROR,
+                    'Please specify the recruited personnel for tryout/recruitment events'
+                );
+            }
             
             // Validate the ending screenshot link
             if (!endingScreenshot || !endingScreenshot.startsWith('http')) {
@@ -305,22 +406,22 @@ module.exports = {
             // Flight Investigations Unit Event,Event Duration,Hosted for?,Recruited Personnel,
             // Notes,Ending Screenshot,1 Verrus Points,3 Verrus Points,5 Verrus Points
             const rowData = [
-                timestamp,                      // A - Timestamp
-                hostUsername,                   // B - Host
-                coHost,                         // C - Co-Host
-                attendeeNames,                  // D - Attendee Names
-                eventType98th,                  // E - 98th Event
-                '',                             // F - 120th Event (empty for 98th events)
-                '',                             // G - 45th Event (empty for 98th events)
-                '',                             // H - Flight Investigations Unit Event (empty for 98th events)
-                eventDuration.toString(),       // I - Event Duration
-                hostedFor,                      // J - Hosted for? (NEW)
-                recruitedPersonnel,             // K - Recruited Personnel
-                notes,                          // L - Notes
-                endingScreenshot,               // M - Ending Screenshot
-                verrusPoints1,                  // N - 1 Verrus Points
-                verrusPoints3,                  // O - 3 Verrus Points
-                verrusPoints5                   // P - 5 Verrus Points
+                timestamp,                                          // A - Timestamp
+                hostUsername,                                       // B - Host
+                coHost,                                            // C - Co-Host
+                attendeeNames,                                     // D - Attendee Names
+                selectedEventType === '98th' ? selectedEventValue : '',   // E - 98th Event
+                selectedEventType === '120th' ? selectedEventValue : '',  // F - 120th Event
+                selectedEventType === '45th' ? selectedEventValue : '',   // G - 45th Event
+                '',                                                // H - Flight Investigations Unit Event
+                eventDuration.toString(),                          // I - Event Duration
+                hostedFor,                                         // J - Hosted for?
+                recruitedPersonnel,                                // K - Recruited Personnel
+                notes,                                             // L - Notes
+                endingScreenshot,                                  // M - Ending Screenshot
+                verrusPoints1,                                     // N - 1 Verrus Points
+                verrusPoints3,                                     // O - 3 Verrus Points
+                verrusPoints5                                      // P - 5 Verrus Points
             ];
             
             try {
@@ -328,20 +429,19 @@ module.exports = {
                     content: `Finding proper row to insert your data...`
                 });
 
-                // Get the next available row based on column A (Timestamp)
+                // Get the next available row
                 let nextRow = await findNextAvailableRow(SPREADSHEET_ID, SHEET_NAME, 2);
                 console.log(`Initial next available row found: ${nextRow}`);
 
-                // Double-check that the row is actually empty in column A
+                // Double-check that the row is actually empty
                 let maxAttempts = 10;
                 let attempts = 0;
 
                 while (attempts < maxAttempts) {
                     const rowFilled = await isRowFilled(SPREADSHEET_ID, SHEET_NAME, nextRow);
                     if (!rowFilled) {
-                        break; // Row is empty in column A, we can use it
+                        break;
                     }
-
                     console.log(`Row ${nextRow} is already filled in column A, trying next row`);
                     nextRow++;
                     attempts++;
@@ -357,7 +457,7 @@ module.exports = {
 
                 console.log(`Using row ${nextRow} for data insertion`);
 
-                // Write directly to the specific row (A to P columns)
+                // Write to the specific row
                 const response = await sheets.spreadsheets.values.update({
                     spreadsheetId: SPREADSHEET_ID,
                     range: `${SHEET_NAME}!A${nextRow}:P${nextRow}`,
@@ -372,12 +472,12 @@ module.exports = {
                 // Create confirmation embed
                 const confirmEmbed = new EmbedBuilder()
                     .setColor('#00FF00')
-                    .setTitle('✅ 98th Airborne Division Event Logged Successfully')
-                    .setDescription(`Your ${eventType98th} event has been recorded for quota tracking.`)
+                    .setTitle(`✅ ${selectedEventType} Event Logged Successfully`)
+                    .setDescription(`Your ${selectedEventValue} event has been recorded for quota tracking.`)
                     .addFields(
                         { name: 'Host', value: hostUsername, inline: true },
                         { name: 'Co-Host', value: coHost || 'None', inline: true },
-                        { name: 'Event Type', value: eventType98th, inline: true },
+                        { name: 'Event Type', value: `${selectedEventType}: ${selectedEventValue}`, inline: true },
                         { name: 'Duration (min)', value: eventDuration.toString(), inline: true },
                         { name: 'Attendees', value: attendeeNames, inline: false },
                         { name: 'Proof', value: `[View Screenshot](${endingScreenshot})`, inline: true },
@@ -433,7 +533,6 @@ module.exports = {
             if (error instanceof LogQuotaError) {
                 await handleError(interaction, error);
             } else {
-                // Handle unexpected errors
                 await handleError(interaction, new LogQuotaError(
                     'An unexpected error occurred',
                     ERROR_CODES.UNKNOWN_ERROR,
