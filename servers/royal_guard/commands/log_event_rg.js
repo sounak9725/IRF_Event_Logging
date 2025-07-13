@@ -69,25 +69,63 @@ async function handleError(interaction, error) {
     }
 }
 
-async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 2) {
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: `${sheetName}!C${startRow}:C3500`
-    });
-    const values = response.data.values || [];
-    for (let i = 0; i < values.length; i++) {
-        if (!values[i][0]) return startRow + i;
+function handleSheetsError(error) {
+    if (error.message && error.message.includes('The caller does not have permission')) {
+        throw new LogQuotaError(
+            'Google Sheets Permission Error',
+            ERROR_CODES.SHEETS_ERROR,
+            'The bot does not have permission to access the Google Sheet. Please check the service account permissions.'
+        );
     }
-    return startRow + values.length;
+    if (error.message && error.message.includes('Quota exceeded')) {
+        throw new LogQuotaError(
+            'Google Sheets Quota Exceeded',
+            ERROR_CODES.SHEETS_ERROR,
+            'Google Sheets API quota has been exceeded. Please try again later.'
+        );
+    }
+    if (error.message && error.message.includes('not found')) {
+        throw new LogQuotaError(
+            'Google Sheets Not Found',
+            ERROR_CODES.SHEETS_ERROR,
+            'The specified Google Sheet or range was not found. Please check the sheet configuration.'
+        );
+    }
+    // Generic sheets error
+    throw new LogQuotaError(
+        'Google Sheets Error',
+        ERROR_CODES.SHEETS_ERROR,
+        error.message || 'An error occurred while accessing Google Sheets'
+    );
+}
+
+async function findNextAvailableRow(spreadsheetId, sheetName, startRow = 2) {
+    try {
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: `${sheetName}!C${startRow}:C3500`
+        });
+        const values = response.data.values || [];
+        for (let i = 0; i < values.length; i++) {
+            if (!values[i][0]) return startRow + i;
+        }
+        return startRow + values.length;
+    } catch (error) {
+        handleSheetsError(error);
+    }
 }
 
 async function isRowFilled(spreadsheetId, sheetName, rowNumber) {
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: `${sheetName}!C${rowNumber}:C${rowNumber}`
-    });
-    const values = response.data.values;
-    return values && values[0].some(cell => cell && cell.trim() !== '');
+    try {
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: `${sheetName}!C${rowNumber}:C${rowNumber}`
+        });
+        const values = response.data.values;
+        return values && values[0].some(cell => cell && cell.trim() !== '');
+    } catch (error) {
+        handleSheetsError(error);
+    }
 }
 
 module.exports = {
@@ -120,11 +158,10 @@ module.exports = {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         try {
-
             const hasRole = logevent.some(roleId => interaction.member.roles.cache.has(roleId.trim()));
             if (!hasRole) {
-             return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
-             }
+                return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
+            }
 
             const rateLimitCheck = checkRateLimit(interaction.user.id);
             if (!rateLimitCheck.allowed) {
@@ -159,17 +196,16 @@ module.exports = {
                         'When "Other" is selected as the event type, "which_event" and "duration" are required.'
                     );
                 }
-                // No restriction on other fields!
             }
 
-             // **Validation for Supervised Events**
-             if (supervised === 'Yes' && !supervisor) {
+            // **Validation for Supervised Events**
+            if (supervised === 'Yes' && !supervisor) {
                 throw new LogQuotaError(
                     'Validation Error',
                     ERROR_CODES.VALIDATION_ERROR,
                     'When the event is supervised, the supervisor name must be provided.'
                 );
-             }
+            }
 
             const timestamp = new Date().toLocaleString('en-GB', {
                 day: '2-digit', month: '2-digit', year: 'numeric',
@@ -196,12 +232,16 @@ module.exports = {
             let attempts = 0;
             while (await isRowFilled(SPREADSHEET_ID, SHEET_NAME, nextRow) && attempts++ < 5) nextRow++;
 
-            await sheets.spreadsheets.values.update({
-                spreadsheetId: SPREADSHEET_ID,
-                range: `${SHEET_NAME}!A${nextRow}:M${nextRow}`,
-                valueInputOption: 'USER_ENTERED',
-                resource: { values: [rowData] }
-            });
+            try {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId: SPREADSHEET_ID,
+                    range: `${SHEET_NAME}!A${nextRow}:M${nextRow}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [rowData] }
+                });
+            } catch (error) {
+                handleSheetsError(error);
+            }
 
             const embed = new EmbedBuilder()
                 .setColor('#00FF00')
