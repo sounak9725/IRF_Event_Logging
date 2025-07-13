@@ -121,7 +121,7 @@ module.exports = {
 
         try {
 
-            const hasRole = logevent.some(roleId => interaction.member.roles.cache.has(roleId));
+            const hasRole = logevent.some(roleId => interaction.member.roles.cache.has(roleId.trim()));
             if (!hasRole) {
              return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
              }
