@@ -372,19 +372,33 @@ client.once("ready", async () => {
     try {
       // Process commands without any rate limit checks
       if (interaction.type === InteractionType.ApplicationCommand) {
-        const command = client.commands.get(interaction.commandName);
-        if (!command) return;
-        
-        await handleCommand(command, interaction);
-      } else if (interaction.type === InteractionType.ModalSubmit) {
+      const command = client.commands.get(interaction.commandName);
+      if (!command) return;
+      
+      await handleCommand(command, interaction);
+    } else if (interaction.type === InteractionType.ModalSubmit) {
+      // Handle deny reason modal specifically
+      if (interaction.customId.startsWith('deny_reason_modal_')) {
+        const command = client.commands.get('request_inactivity_notice');
+        if (command && command.handleDenyModal) {
+          await command.handleDenyModal(client, interaction);
+        } else {
+          await interaction.reply({
+            content: 'This modal is no longer available.',
+            ephemeral: true
+          });
+        }
+      } else {
+        // Handle other modals
         await handleModal(interaction);
-      } else if (interaction.type === InteractionType.MessageContextMenu) {
-        const command = client.commands.get(interaction.commandName);
-        await command.run(client, interaction);
-      } else if (interaction.type === InteractionType.Autocomplete) {
-        const command = client.commands.get(interaction.commandName);
-        await command.autocomplete(interaction);
       }
+    } else if (interaction.type === InteractionType.MessageContextMenu) {
+      const command = client.commands.get(interaction.commandName);
+      await command.run(client, interaction);
+    } else if (interaction.type === InteractionType.Autocomplete) {
+      const command = client.commands.get(interaction.commandName);
+      await command.autocomplete(interaction);
+    }
     } catch (error) {
       console.error('Error handling interaction:', error);
       toConsole('Interaction handling failed', error.stack, client);
