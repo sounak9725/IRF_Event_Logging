@@ -1,6 +1,7 @@
 /* eslint-disable no-unused-vars */
 const { Client, EmbedBuilder, Interaction, ActionRow, ButtonComponent, SelectMenuComponent, SelectMenuInteraction, SelectMenuOptionBuilder, ComponentType, ActionRowBuilder, ButtonStyle, ButtonBuilder, User } = require("discord.js");
 const { default: fetch } = require("node-fetch");
+const nbx = require('noblox.js'); // Make sure noblox.js is imported
 const config = require("./config.json");
 const fs = require("fs");
 const path = require("path");
@@ -196,6 +197,26 @@ const logToChannel = async function (client, channelId, options) {
     await message.edit({ content: content, components: [] });
     return res;
   };
+  /**
+ * Get user's rank name in a Roblox group using noblox.js.
+ * Returns "N/A - Failed, enter manual" if not found or on error.
+ * @param {string|number} userId - Roblox user ID
+ * @param {number} groupId - Roblox group ID
+ * @returns {Promise<string>}
+ */
+const getNobloxRank = async function (userId, groupId) {
+    try {
+        const rankId = await nbx.getRankInGroup(groupId, userId);
+        if (rankId > 0) {
+            const rankName = await nbx.getRankNameInGroup(groupId, userId);
+            return rankName || "N/A - Failed, enter manual";
+        } else {
+            return "N/A - Failed, enter manual";
+        }
+    } catch (error) {
+        return "N/A - Failed, enter manual";
+    }
+};
   /**
    * Send a SelectMenuComponent to a user and awaits the response
    * @param {Interaction} interaction Interaction object
@@ -710,5 +731,6 @@ module.exports = {
   getRobloxInfoFromDiscordMentionsOrRobloxUsernames,
   getGroupByUserId,
   getFriendsCount,
-  interactionEmbed
+  interactionEmbed,
+  getNobloxRank
 };
