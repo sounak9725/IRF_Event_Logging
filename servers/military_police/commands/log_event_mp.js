@@ -102,6 +102,7 @@ module.exports = {
             { name: 'Formalities Training', value: 'Formalities Training' },
             { name: 'Discipline Training', value: 'Discipline Training' },
             { name: 'Joint Event', value: 'Joint Event' },
+            {name: 'Fort Security Training', value: 'Fort Security Training' },
             { name: 'Wing Event', value: 'Wing Event' }
         ))
         .addIntegerOption(option => option.setName('total_attendees').setDescription('Total number of attendees').setRequired(true))
@@ -191,6 +192,25 @@ module.exports = {
                 valueInputOption: 'USER_ENTERED',
                 resource: { values: [rowData] }
             });
+
+            // If event is Recruitment Session or Tryout and recruits are present, send embed to MPA command channel
+            if (
+                (eventType === 'Recruitment Session' || eventType === 'Tryout') &&
+                recruits &&
+                recruits !== 'N/A'
+            ) {
+                const mpaChannelId = '1387773649486090270';
+                const mpaChannel = await client.channels.fetch(mpaChannelId).catch(() => null);
+                if (mpaChannel && mpaChannel.isTextBased()) {
+                    const recruitsList = recruits.split(',').map(r => r.trim()).filter(Boolean).join(', ');
+                    const recruitEmbed = new EmbedBuilder()
+                        .setColor('#0099ff')
+                        .setTitle('New Recruits Logged')
+                        .setDescription(`**Event Type:** ${eventType}\n**Host:** ${robloxUsername}\n**Recruits:** ${recruitsList}`)
+                        .setTimestamp();
+                    await mpaChannel.send({ embeds: [recruitEmbed] });
+                }
+            }
 
             const embed = new EmbedBuilder()
                 .setColor('#00FF00')
