@@ -1,7 +1,7 @@
 // eslint-disable-next-line no-unused-vars
 const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFlags } = require('discord.js');
 const { sheets } = require('../../../utils/googleSheetsAuth');
-const { getRowifi, getNobloxRank, interactionEmbed } = require('../../../functions');
+const { getRowifi, interactionEmbed } = require('../../../functions');
 const config = require('../../../config.json');
 const { logevent } = require('../../../permissions.json').mp;
 
@@ -106,12 +106,21 @@ module.exports = {
             { name: 'Wing Event', value: 'Wing Event' }
         ))
         .addIntegerOption(option => option.setName('total_attendees').setDescription('Total number of attendees').setRequired(true))
-        .addStringOption(option => option.setName('attendees').setDescription('Attendee usernames (comma-separated)').setRequired(true))
+        .addStringOption(option => 
+            option.setName('attendees')
+                .setDescription('Attendee usernames and APs (e.g., fortnite546799:6,CraftyToaster2005:6)')
+                .setRequired(true)
+        )
         .addStringOption(option => option.setName('ap_required').setDescription('AP Required (Yes/No)').setRequired(true).addChoices(
             { name: 'Yes', value: 'Yes' },
             { name: 'No', value: 'No' }
         ))
         .addStringOption(option => option.setName('evidence').setDescription('Evidence link (Gyazo, Discord App)').setRequired(true))
+        .addStringOption(option => 
+            option.setName('rank')
+                .setDescription('Your MP rank (e.g., Major, Sergeant Major, Probationary Constable)')
+                .setRequired(true)
+        )
         // Optional options below
         .addStringOption(option => option.setName('cohosts').setDescription('Co-host usernames (comma-separated)').setRequired(false))
         .addStringOption(option => option.setName('recruits').setDescription('Recruits (comma-separated)').setRequired(false))
@@ -140,8 +149,7 @@ module.exports = {
             if (!rowifi.success) throw new LogQuotaError('Unable to fetch your Roblox username.', ERROR_CODES.ROWIFI_ERROR, rowifi.error);
             const robloxUsername = rowifi.username;
 
-            const rank = await getNobloxRank(rowifi.roblox);
-            if (!rank) throw new LogQuotaError('Unable to fetch your rank from Noblox.', ERROR_CODES.VALIDATION_ERROR);
+            const rank = interaction.options.getString('rank');
 
             const timestamp = new Date().toLocaleString('en-GB', {
     day: 'numeric',
@@ -155,7 +163,25 @@ module.exports = {
 
             const eventType = interaction.options.getString('event_type');
             const totalAttendees = interaction.options.getInteger('total_attendees');
+            if (!Number.isInteger(totalAttendees) || totalAttendees < 1) {
+                throw new LogQuotaError('Total attendees must be a positive integer.', ERROR_CODES.VALIDATION_ERROR);
+            }
+
             const attendees = interaction.options.getString('attendees');
+            const attendeeRegex = /^([a-zA-Z0-9_]+:\d+)(,([a-zA-Z0-9_]+:\d+))*$/;
+            if (!attendeeRegex.test(attendees)) {
+                throw new LogQuotaError(
+                    'Attendees must be in the format: username:AP,username:AP (e.g., fortnite546799:6,CraftyToaster2005:6)',
+                    ERROR_CODES.VALIDATION_ERROR
+                );
+            }
+            const attendeeList = attendees.split(',').map(a => a.trim()).filter(Boolean);
+            if (attendeeList.length !== totalAttendees) {
+                throw new LogQuotaError(
+                    `Total attendees (${totalAttendees}) does not match the number of attendees provided (${attendeeList.length}).`,
+                    ERROR_CODES.VALIDATION_ERROR
+                );
+            }
             const apRequired = interaction.options.getString('ap_required');
             const evidence = interaction.options.getString('evidence');
             const cohosts = interaction.options.getString('cohosts') || 'N/A';
