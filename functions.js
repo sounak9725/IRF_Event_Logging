@@ -293,30 +293,89 @@ const getNobloxRank = async function (userId, groupId) {
     if (!role) return { success: false, error: "User is not in the group specified" };
     return { success: true, data: role };
   };
+  
   /**
  * @async
  * @param {number|string} user Discord user ID
  * @param {Client} client Discord client
  * @returns {{success: false, error?: string}|{success: true, roblox: string, username: string}}
  */
-  const getRowifi = async (user, client) => {
-    if (!user) return { success: false, error: "No username provided" };
-    const userData = await fetch(`https://api.rowifi.xyz/v2/guilds/${config.discord.mainServer}/members/${user}`, { headers: { "Authorization": `Bot ${config.bot.rowifiApiKey}` } })
-      .then(res => {
-        if (!res.ok) {
-          if (res.status !== 404) module.exports.toConsole(`Rowifi API returned ${res.status} ${res.statusText}`, new Error().stack, client);
-          return { success: false };
-        } else
-          return res.json();
-      });
-    if (userData.success !== undefined) return { success: false, error: "Rowifi failed to return any data! (If you are signed in with Rowifi, report this to a developer)" };
+const getRowifi = async (user, client) => {
+  if (!user) return { success: false, error: "No user ID provided" };
+  if (!config?.discord?.mainServer || !config?.bot?.rowifiApiKey) {
+    return { success: false, error: "Missing configuration (mainServer or API key)" };
+  }
 
-    const roblox = await fetch(`https://users.roblox.com/v1/users/${userData.roblox_id}`)
-      .then(res => res.json());
-    if (roblox.errors) return { success: false, error: "Roblox ID does not exist" };
+  try {
+    // Debug logging (remove in production)
+    console.log(`Making request to: https://api.rowifi.xyz/v3/guilds/${config.discord.mainServer}/members/${user}`);
+    console.log(`Token exists: ${!!config.bot.rowifiApiKey}`);
+    console.log(`Token length: ${config.bot.rowifiApiKey?.length || 0}`);
 
-    return { success: true, roblox: userData.roblox_id.toString(), username: roblox.name };
-  };
+    const rowifiRes = await fetch(`https://api.rowifi.xyz/v3/guilds/${config.discord.mainServer}/members/${user}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bot ${config.bot.rowifiApiKey}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot/1.0'
+      }
+    });
+
+    // Enhanced error handling for 401
+    if (rowifiRes.status === 401) {
+      console.error("401 Unauthorized - Check your RoWifi API token");
+      return { success: false, error: "Unauthorized: Invalid API token or insufficient permissions" };
+    }
+
+    if (rowifiRes.status === 404) {
+      return { success: false, error: "User not found in RoWifi database" };
+    }
+
+    if (rowifiRes.status === 403) {
+      return { success: false, error: "Forbidden: Bot lacks permissions for this guild" };
+    }
+
+    if (rowifiRes.status === 429) {
+      return { success: false, error: "Rate limited: Too many requests" };
+    }
+
+    if (!rowifiRes.ok) {
+      const errorText = await rowifiRes.text().catch(() => 'Unknown error');
+      console.error(`RoWifi API Error: ${rowifiRes.status} ${rowifiRes.statusText}`, errorText);
+      return { success: false, error: `RoWifi API error: ${rowifiRes.status} ${rowifiRes.statusText}` };
+    }
+
+    const rowifiData = await rowifiRes.json();
+    const robloxId = rowifiData.roblox_id;
+    
+    if (!robloxId) {
+      return { success: false, error: "No linked Roblox ID found" };
+    }
+
+    // Fetch Roblox user data
+    const robloxRes = await fetch(`https://users.roblox.com/v1/users/${robloxId}`);
+    
+    if (!robloxRes.ok) {
+      return { success: false, error: "Failed to fetch Roblox user data" };
+    }
+
+    const robloxData = await robloxRes.json();
+
+    if (robloxData.errors && robloxData.errors.length > 0) {
+      return { success: false, error: "Roblox ID is invalid or deleted" };
+    }
+
+    return {
+      success: true,
+      roblox: robloxData.id.toString(),
+      username: robloxData.name || robloxData.displayName
+    };
+
+  } catch (error) {
+    console.error("Error in getRowifi function:", error);
+    return { success: false, error: "Network error or API unavailable" };
+  }
+};
 
   /**
    * @param {String} time
