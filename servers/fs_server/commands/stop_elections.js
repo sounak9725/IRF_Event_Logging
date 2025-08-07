@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { Admin, Vote } = require('../../../DBModels/election'); // Adjust path as needed
+const { logevent } = require('../../../permissions.json').fs;
 
 module.exports = {
     name: 'stop_elections',
@@ -11,13 +12,16 @@ module.exports = {
             option.setName('show_results')
                 .setDescription('Show election results after stopping')
                 .setRequired(false)
-        )
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
+        ),
     run: async(client, interaction) => {
         try {
             await interaction.deferReply({ ephemeral: true });
-
+            
+            const hasRole = logevent.some(roleId => interaction.member.roles.cache.has(roleId));
+            if (!hasRole) {
+             return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
+             }
+             
             const showResults = interaction.options.getBoolean('show_results') ?? true;
 
             // Check if user has admin permissions

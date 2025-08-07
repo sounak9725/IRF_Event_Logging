@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { Admin, Vote, Participation } = require('../../../DBModels/election'); // Adjust path as needed
+const { logevent } = require('../../../permissions.json').fs;
+
 
 module.exports = {
     name: 'start_elections',
@@ -17,13 +19,15 @@ module.exports = {
             option.setName('announcement_channel')
                 .setDescription('Channel to announce the election')
                 .setRequired(false)
-        )
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
+        ),
     run: async(client, interaction) => {
         try {
             await interaction.deferReply({ ephemeral: true });
-
+             const hasRole = logevent.some(roleId => interaction.member.roles.cache.has(roleId));
+            if (!hasRole) {
+             return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
+             }
+             
             const durationHours = interaction.options.getInteger('duration_hours');
             const announcementChannel = interaction.options.getChannel('announcement_channel') || interaction.channel;
 
