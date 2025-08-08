@@ -201,7 +201,6 @@ module.exports = {
 
             // Create timestamp in DD/MM/YYYY HH:mm:ss format
             const timestamp = formatTimestamp(new Date());
-            console.log('Generated timestamp:', timestamp); // Debug log
 
             // Validate required fields based on event type
             if (eventType === 'Self Patrol' || eventType === 'GA Patrol' || eventType === 'Border Simulation Exercise') {
