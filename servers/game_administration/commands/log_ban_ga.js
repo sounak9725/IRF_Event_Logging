@@ -122,7 +122,7 @@ async function findNextAvailableRow() {
     try {
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!${START_COLUMN}${START_ROW}:${START_COLUMN}10000`
+            range: `${SHEET_NAME}!${START_COLUMN}${START_ROW}:${START_COLUMN}3000`
         });
 
         const values = response.data.values || [];
