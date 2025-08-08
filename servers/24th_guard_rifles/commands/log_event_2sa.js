@@ -2,7 +2,6 @@
 const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFlags } = require('discord.js');
 const { sheets } = require('../../../utils/googleSheetsAuth');
 const { getRowifi, interactionEmbed } = require('../../../functions');
-const config = require('../../../config.json');
 const { logevent } = require('../../../permissions.json')['24thsa'];
 
 class LogQuotaError extends Error {
