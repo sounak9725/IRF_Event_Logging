@@ -84,6 +84,18 @@ async function findNextAvailableRow() {
     }
 }
 
+// Helper function to format the timestamp as DD/MM/YYYY HH:mm:ss
+function formatTimestamp(date) {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-based
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+}
+
 module.exports = {
     name: 'log_activity_ga',
     description: 'Log an activity to the tracking spreadsheet',
@@ -170,7 +182,8 @@ module.exports = {
              return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
              }
              const rowifi = await getRowifi(interaction.user.id, client);
-            if (!rowifi.success) throw new LogQuotaError('Unable to fetch your Roblox username.', ERROR_CODES.ROWIFI_ERROR, rowifi.error);
+            if (!rowifi.success) throw new LogActivityError('Unable to fetch your Roblox username.', ERROR_CODES.ROWIFI_ERROR, rowifi.error);
+            
             // Get all input values
             const username = rowifi.username;
             const eventType = interaction.options.getString('event_type');
@@ -186,18 +199,9 @@ module.exports = {
             const endProof = interaction.options.getString('end_proof') || '';
             const notes = interaction.options.getString('notes') || '';
 
-            // Helper function to format the timestamp as DD/MM/YYYY HH:mm:ss
-            function formatTimestamp(date) {
-                const day = String(date.getDate()).padStart(2, '0');
-                 const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-based
-                const year = date.getFullYear();
-                 const hours = String(date.getHours()).padStart(2, '0');
-                 const minutes = String(date.getMinutes()).padStart(2, '0');
-                const seconds = String(date.getSeconds()).padStart(2, '0');
-    
-                return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-            }
+            // Create timestamp in DD/MM/YYYY HH:mm:ss format
             const timestamp = formatTimestamp(new Date());
+            console.log('Generated timestamp:', timestamp); // Debug log
 
             // Validate required fields based on event type
             if (eventType === 'Self Patrol' || eventType === 'GA Patrol' || eventType === 'Border Simulation Exercise') {
@@ -313,6 +317,7 @@ module.exports = {
             // Find the next available row
             const nextRow = await findNextAvailableRow();
             console.log(`Next available row: ${nextRow}`);
+            console.log('Row data to be written:', rowData); // Debug log
 
             // Write to the sheet (columns C to P)
             await sheets.spreadsheets.values.update({
