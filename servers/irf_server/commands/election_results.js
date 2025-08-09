@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { Admin, Vote, Participation } = require('../../../DBModels/election'); // Adjust path as needed
-const { logevent } = require('../../../permissions.json').fs;
+const { logevent } = require('../../../permissions.json').irf;
+const { interactionEmbed } = require('../../../functions');
 
 
 module.exports = {
@@ -82,15 +83,15 @@ module.exports = {
 
             // Create main results embed
             const resultsEmbed = new EmbedBuilder()
-                .setTitle(`📊 Election Results`)
+                .setTitle(`Election Results`)
                 .setColor('#ffd700')
                 .setDescription(`**Total Votes Cast:** ${votes.length}`)
                 .addFields(
                     {
-                        name: '🏆 Results',
+                        name: 'Results',
                         value: sortedResults.map(result => 
                             `**${result.position}.** ${result.candidate}\n` +
-                            `   📊 **${result.votes}** votes (${result.percentage}%)`
+                            `    **${result.votes}** votes (${result.percentage}%)`
                         ).join('\n\n'),
                         inline: false
                     }
@@ -100,7 +101,7 @@ module.exports = {
             if (sortedResults.length > 0) {
                 const winner = sortedResults[0];
                 resultsEmbed.addFields({
-                    name: '👑 Winner',
+                    name: 'Winner',
                     value: `**${winner.candidate}** with ${winner.votes} votes (${winner.percentage}%)`,
                     inline: false
                 });
@@ -115,7 +116,7 @@ module.exports = {
                 if (now >= adminDoc.electionStart && now <= end) status = '🟢 Active';
             }
             resultsEmbed.addFields({
-                name: '📈 Election Status',
+                name: 'Election Status',
                 value: status,
                 inline: true
             });
@@ -129,7 +130,7 @@ module.exports = {
             // Add detailed results if requested
             if (detailed && sortedResults.length > 0) {
                 const detailedEmbed = new EmbedBuilder()
-                    .setTitle(`📋 Detailed Results`)
+                    .setTitle(`Detailed Results`)
                     .setColor('#00bfff')
                     .setDescription('Voter information for each candidate');
 
@@ -158,7 +159,7 @@ module.exports = {
 
             // Add statistics embed
             const statsEmbed = new EmbedBuilder()
-                .setTitle(`📈 Statistics`)
+                .setTitle(`Statistics`)
                 .setColor('#32cd32');
 
             // Get participation statistics
@@ -171,14 +172,14 @@ module.exports = {
 
             statsEmbed.addFields(
                 {
-                    name: '📊 Voting Statistics',
+                    name: 'Voting Statistics',
                     value: `**Total Participants:** ${totalParticipants}\n` +
                            `**Candidates:** ${Object.keys(voteCount).length}\n` +
                            `**Parties Represented:** ${new Set(votes.map(v => v.party)).size}`,
                     inline: true
                 },
                 {
-                    name: '⏰ Timing',
+                    name: 'Timing',
                     value: `**First Vote:** <t:${Math.floor(firstVote.getTime() / 1000)}:R>\n` +
                            `**Last Vote:** <t:${Math.floor(lastVote.getTime() / 1000)}:R>\n` +
                            `**Duration:** ${Math.round((lastVote - firstVote) / (1000 * 60))} minutes`,

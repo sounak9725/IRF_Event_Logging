@@ -12,6 +12,28 @@ const auth = new GoogleAuth({
 // Initialize Google Sheets client
 const sheets = google.sheets({ version: 'v4', auth });
 
+// Lightweight in-memory queue to batch vote logs and avoid Sheets rate limits
+if (!global.__sheetsVoteQueue) {
+  global.__sheetsVoteQueue = [];
+}
+if (!global.__sheetsVoteFlusher) {
+  global.__sheetsVoteFlusher = setInterval(async () => {
+    try {
+      const queue = global.__sheetsVoteQueue;
+      if (!queue || queue.length === 0) return;
+      const batch = queue.splice(0, 100);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: "1lrNPtGL6ziBus9Y5l6fg8NXYvUggmDEZAyUQRyZsdgg",
+        range: `Election Raw Data!A:D`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: batch }
+      });
+    } catch (e) {
+      console.error('Sheets queue flush failed:', e);
+    }
+  }, 1500); // flush every 1.5 seconds
+}
+
 // Cache system for sheet data to reduce API calls
 const dataCache = new Map();
 const CACHE_TTL = 60 * 1000; // 1 minute cache TTL

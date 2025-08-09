@@ -20,6 +20,7 @@ const { manageGuildCommands } = require('./commands_cleaning.js');
   const mongoose = require('mongoose');
   const path = require("path");
   let ready = false;
+  const { Vote, Participation } = require('./DBModels/election');
   
   const client = new Client({ 
     intents: [
@@ -135,6 +136,38 @@ const { manageGuildCommands } = require('./commands_cleaning.js');
     }
   
     return connectWithRetry();
+  }
+
+  // Ensure proper election-related indexes and migrate old ones
+  async function ensureElectionIndexes() {
+    try {
+      // Create/ensure unique vote index per guild-user
+      await Vote.collection.createIndex({ guildId: 1, userId: 1 }, { unique: true, name: 'guild_user_unique' });
+    } catch (e) {
+      console.error('Failed to ensure Vote index (guild_user_unique):', e);
+    }
+
+    try {
+      // Ensure participation unique index per user-guild
+      await Participation.collection.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+    } catch (e) {
+      console.error('Failed to ensure Participation index:', e);
+    }
+
+    try {
+      // Drop legacy index if it exists
+      const indexes = await Vote.collection.indexes();
+      const legacy = indexes.find(i => i.name === 'userId_1_electionId_1');
+      if (legacy) {
+        await Vote.collection.dropIndex('userId_1_electionId_1');
+        console.log('Dropped legacy Vote index userId_1_electionId_1');
+      }
+    } catch (e) {
+      // Non-fatal if not present
+      if (!String(e).includes('index not found')) {
+        console.warn('Could not drop legacy Vote index:', e);
+      }
+    }
   }
   
   // Load modals function (added to fix missing modal loading)
@@ -314,6 +347,9 @@ client.once("ready", async () => {
       setupCacheCleanup(),
       setupGracefulShutdown()
     ]);
+    if (dbOk) {
+      await ensureElectionIndexes();
+    }
     
     console.log(`Services status: Database: ${dbOk ? 'OK' : 'Limited functionality'}`);
 

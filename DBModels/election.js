@@ -82,8 +82,8 @@ const voteSchema = new mongoose.Schema({
   }
 });
 
-// Compound index to ensure one vote per user per election (no re-voting)
-voteSchema.index({ userId: 1, electionId: 1 }, { unique: true });
+// Compound index to ensure one vote per user per guild (no re-voting per guild)
+voteSchema.index({ guildId: 1, userId: 1 }, { unique: true, name: 'guild_user_unique' });
 
 // User participation tracking schema
 const participationSchema = new mongoose.Schema({

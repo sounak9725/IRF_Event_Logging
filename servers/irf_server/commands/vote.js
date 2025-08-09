@@ -19,8 +19,8 @@ const candidateChoices = [
     { name: 'Penkuvsky (ARAMP)', value: 'Penkuvsky - ARAMP' },
     { name: 'fbiagent490 (ARAMP)', value: 'fbiagent490 - ARAMP' },
     { name: 'vitkovapofilovka (ARAMP)', value: 'vitkovapofilovka - ARAMP' },
-    { name: 'qwertyintent (ARAMP)', value: 'qwertyintent - ARAMP' },
-    { name: 'Gabrielpfponi (ARAMP)', value: 'Gabrielpfponi - ARAMP' },
+    { name: 'Qwertyintent (ARAMP)', value: 'Qwertyintent - ARAMP' },
+    { name: 'Gabrielpfpono (ARAMP)', value: 'Gabrielpfpono - ARAMP' },
     // CDP
     { name: 'FortniteDab96 (CDP)', value: 'FortniteDab96 - CDP' },
     { name: 'mitroo3 (CDP)', value: 'mitroo3 - CDP' },
@@ -68,29 +68,27 @@ module.exports = {
         });
       }
 
-      const existingVote = await Vote.findOne({ userId, guildId });
-      if (existingVote) {
-        return await interaction.editReply({
-          content: `❌ You have already voted. Your vote was for: **${existingVote.candidateName} - ${existingVote.party}**`,
-          ephemeral: true
-        });
+      // Atomic insert guarded by unique index (guildId + userId)
+      let vote;
+      try {
+        vote = await Vote.create({ userId, username, candidateName, party, guildId });
+      } catch (err) {
+        if (err && err.code === 11000) {
+          const dup = await Vote.findOne({ userId, guildId });
+          return await interaction.editReply({
+            content: `❌ You have already voted. Your vote was for: **${dup.candidateName} - ${dup.party}**`,
+            ephemeral: true
+          });
+        }
+        throw err;
       }
 
-      const vote = new Vote({ userId, username, candidateName, party, guildId });
-      await vote.save();
-
-      let participation = await Participation.findOne({ userId, guildId });
-      if (participation) {
-        participation.lastParticipation = new Date();
-        await participation.save();
-      } else {
-        await new Participation({
-          userId,
-          username,
-          guildId,
-          lastParticipation: new Date()
-        }).save();
-      }
+      // Atomic upsert for participation to avoid race duplicates
+      await Participation.updateOne(
+        { userId, guildId },
+        { $set: { username, lastParticipation: new Date() } },
+        { upsert: true }
+      );
 
       const voteEmbed = new EmbedBuilder()
         .setTitle('✅ Vote Recorded Successfully!')
@@ -105,28 +103,27 @@ module.exports = {
 
       await interaction.editReply({ embeds: [voteEmbed], ephemeral: true });
 
-      // ✅ Log to Google Sheet
+      // ✅ Log to Google Sheet via queued appender
       try {
-         const timestamp = new Date().toLocaleString('en-GB', {
+        const timestamp = new Date().toLocaleString('en-GB', {
           day: 'numeric', month: 'numeric', year: 'numeric',
-             hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: false
-         });
-
-        const fullPartyName = partyFullNames[party] || party; // Fallback to abbreviation if unknown
-
-        await sheets.spreadsheets.values.append({
-         spreadsheetId: "1lrNPtGL6ziBus9Y5l6fg8NXYvUggmDEZAyUQRyZsdgg",
-         range: `Election Raw Data!A:D`,
-         valueInputOption: 'USER_ENTERED',
-         resource: {
-        values: [
-        [timestamp, username, candidateName, fullPartyName] // ✅ Columns A-D
-        ]
+          hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: false
+        });
+        const fullPartyName = partyFullNames[party] || party;
+        if (global.__sheetsVoteQueue) {
+          global.__sheetsVoteQueue.push([timestamp, username, candidateName, fullPartyName]);
+        } else {
+          // Fallback immediate append if queue not initialized
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: "1lrNPtGL6ziBus9Y5l6fg8NXYvUggmDEZAyUQRyZsdgg",
+            range: `Election Raw Data!A:D`,
+            valueInputOption: 'USER_ENTERED',
+            resource: { values: [[timestamp, username, candidateName, fullPartyName]] }
+          });
         }
-      });
-        } catch (err) {
-         console.error('Failed to log vote to Google Sheet:', err);
-     }
+      } catch (err) {
+        console.error('Failed to log vote to Google Sheet:', err);
+      }
 
         } catch (error) {
       console.error('Error in vote command:', error);

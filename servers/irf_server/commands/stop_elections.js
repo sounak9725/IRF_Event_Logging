@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { Admin, Vote } = require('../../../DBModels/election'); // Adjust path as needed
-const { logevent } = require('../../../permissions.json').fs;
+const { logevent } = require('../../../permissions.json').irf;
+const { interactionEmbed } = require('../../../functions');
 
 module.exports = {
     name: 'stop_elections',

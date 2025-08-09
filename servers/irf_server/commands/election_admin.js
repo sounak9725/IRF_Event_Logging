@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags, CommandInteraction, CommandInteractionOptionResolver } = require('discord.js');
 const { Admin, Vote, Participation } = require('../../../DBModels/election'); 
 const { interactionEmbed } = require('../../../functions'); 
+const config = require('../../../config.json');
 
 // Define your required role IDs here
 const requiredRoles = [
@@ -90,13 +91,32 @@ module.exports = {
         try {
             await interaction.deferReply({ ephemeral: true });
 
-            // Role-based permission check
-            const hasRole = requiredRoles.some(roleId => interaction.member.roles.cache.has(roleId));
-            if (!hasRole) {
-                return interactionEmbed(3, "[ERR-UPRM]", '', interaction, client, [true, 30]);
-            }
-
             const subcommand = interaction.options.getSubcommand();
+
+            // Owner-only gate for reset_votes subcommand
+            if (subcommand === 'reset_votes') {
+                const ownerId = config?.discord?.ownerId;
+                if (ownerId) {
+                    if (interaction.user.id !== ownerId) {
+                        return await interaction.editReply({
+                            content: 'No bro u cant do that lmao,',
+                            ephemeral: true
+                        });
+                    }
+                } else {
+                    // If ownerId is not configured, fall back to role-based permission
+                    const hasRoleForFallback = requiredRoles.some(roleId => interaction.member.roles.cache.has(roleId));
+                    if (!hasRoleForFallback) {
+                        return interactionEmbed(3, "[ERR-UPRM]", '', interaction, client, [true, 30]);
+                    }
+                }
+            } else {
+                // Role-based permission check for all other subcommands
+                const hasRole = requiredRoles.some(roleId => interaction.member.roles.cache.has(roleId));
+                if (!hasRole) {
+                    return interactionEmbed(3, "[ERR-UPRM]", '', interaction, client, [true, 30]);
+                }
+            }
 
             // Find or create admin document
             let adminDoc = await Admin.findOne();
@@ -229,7 +249,7 @@ async function handleListCandidates(interaction, adminDoc) {
     }
 
     const embed = new EmbedBuilder()
-        .setTitle('📋 Candidates List')
+        .setTitle('Candidates List')
         .setColor('#0099ff')
         .setDescription('All Candidates');
 
@@ -252,7 +272,7 @@ async function handleListParties(interaction, adminDoc) {
     }
 
     const embed = new EmbedBuilder()
-        .setTitle('🏛️ Parties List')
+        .setTitle('Parties List')
         .setColor('#0099ff')
         .setDescription('All registered parties');
 
@@ -271,48 +291,48 @@ async function handleElectionStatus(interaction, adminDoc) {
     const totalParticipants = await Participation.countDocuments({ guildId: interaction.guild.id });
 
     const embed = new EmbedBuilder()
-        .setTitle('📊 Election Status')
+        .setTitle('Election Status')
         .setColor(adminDoc.isElectionActive ? '#00ff00' : '#ff0000')
         .addFields(
             {
-                name: '📊 Election Status',
+                name: 'Election Status',
                 value: adminDoc.isElectionActive ? '🟢 Active' : '🔴 Inactive',
                 inline: true
             },
             {
-                name: '⏰ Election Window',
+                name: 'Election Window',
                 value: adminDoc.electionStart && adminDoc.electionDurationHours
                     ? `<t:${Math.floor(new Date(adminDoc.electionStart).getTime() / 1000)}:f> to <t:${Math.floor(new Date(adminDoc.electionStart).getTime() / 1000) + (adminDoc.electionDurationHours * 3600)}:f>`
                     : 'Not set',
                 inline: true
             },
             {
-                name: '📺 Announcement Channel',
+                name: 'Announcement Channel',
                 value: adminDoc.announcementChannel ? `<#${adminDoc.announcementChannel}>` : 'Not set',
                 inline: true
             },
             {
-                name: '🗳️ Total Votes Cast',
+                name: 'Total Votes Cast',
                 value: totalVotes.toString(),
                 inline: true
             },
             {
-                name: '👥 Total Participants',
+                name: 'Total Participants',
                 value: totalParticipants.toString(),
                 inline: true
             },
             {
-                name: '🏛️ Total Parties',
+                name: 'Total Parties',
                 value: adminDoc.parties.length.toString(),
                 inline: true
             },
             {
-                name: '👤 Total Candidates',
+                name: 'Total Candidates',
                 value: adminDoc.candidates.length.toString(),
                 inline: true
             },
             {
-                name: '📅 Last Updated',
+                name: 'Last Updated',
                 value: `<t:${Math.floor(adminDoc.updatedAt.getTime() / 1000)}:R>`,
                 inline: true
             }
