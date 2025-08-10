@@ -30,22 +30,36 @@ const { manageGuildCommands } = require('./commands_cleaning.js');
       GatewayIntentBits.GuildMembers,   
       GatewayIntentBits.MessageContent
     ],
+    // WebSocket optimization settings
+    ws: {
+      properties: {
+        browser: 'Discord iOS'
+      },
+      large_threshold: 50,
+      compress: true
+    },
     // Check if Options is defined before using it
     ...(typeof Options !== 'undefined' ? {
       makeCache: Options.cacheWithLimits({
-        MessageManager: 50, // Limit cached messages
-        UserManager: 100,   // Limit cached users
-        GuildMemberManager: 100 // Limit cached guild members
+        MessageManager: 25, // Reduced cache limits for better performance
+        UserManager: 50,   // Reduced cache limits
+        GuildMemberManager: 50, // Reduced cache limits
+        GuildManager: 10,  // Limit guild cache
+        ChannelManager: 25 // Limit channel cache
       }),
       sweepers: {
-        // Automatically clean up unused cache
+        // More aggressive cache cleanup
         messages: {
-          interval: 3600, // Every hour
-          lifetime: 1800  // Remove messages older than 30 minutes
+          interval: 1800, // Every 30 minutes
+          lifetime: 900   // Remove messages older than 15 minutes
         },
         users: {
-          interval: 3600,
-          filter: () => user => !user.bot && Date.now() - user.lastMessageTimestamp > 3600000
+          interval: 1800, // Every 30 minutes
+          filter: () => user => !user.bot && Date.now() - user.lastMessageTimestamp > 1800000
+        },
+        guildMembers: {
+          interval: 3600, // Every hour
+          filter: () => member => !member.presence && Date.now() - member.joinedTimestamp > 86400000
         }
       }
     } : {})
@@ -92,7 +106,13 @@ const { manageGuildCommands } = require('./commands_cleaning.js');
     const connectOptions = {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
-      family: 4 // Use IPv4, skip trying IPv6
+      family: 4, // Use IPv4, skip trying IPv6
+      maxPoolSize: 10, // Limit connection pool
+      minPoolSize: 1,
+      maxIdleTimeMS: 30000, // Close idle connections after 30 seconds
+      connectTimeoutMS: 10000, // Connection timeout
+      bufferCommands: false, // Disable command buffering for better performance
+      bufferMaxEntries: 0 // Disable buffer max entries
     };
   
     mongoose.connection.on('connected', () => {
@@ -503,6 +523,33 @@ client.once("ready", async () => {
     process.exit(1);
   });
   
+  // WebSocket performance monitoring
+  client.ws.on('ready', () => {
+    console.log('WebSocket connection established');
+  });
+
+  client.ws.on('close', (event) => {
+    console.log(`WebSocket connection closed: ${event.code} - ${event.reason}`);
+  });
+
+  client.ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+  });
+
+  // Performance monitoring
+  setInterval(() => {
+    const wsLatency = client.ws.ping;
+    const memoryUsage = process.memoryUsage();
+    
+    if (wsLatency > 200) {
+      console.warn(`High WebSocket latency detected: ${wsLatency}ms`);
+    }
+    
+    if (memoryUsage.heapUsed > 100 * 1024 * 1024) { // 100MB
+      console.warn(`High memory usage: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`);
+    }
+  }, 60000); // Check every minute
+
   // Enhanced error handling
   process.on("uncaughtException", (err, origin) => {
     if (!ready) {

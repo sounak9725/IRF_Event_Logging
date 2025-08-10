@@ -4,8 +4,7 @@ const { interactionEmbed } = require('../../../functions');
 const config = require('../../../config.json');
 
 // Define your required role IDs here
-const requiredRoles = [
-    '1049072890919800873', '450434193206411277', '660676336276340757', '1129468969779204209'];
+const requiredRoles = ['1049072890919800873', '450434193206411277', '660676336276340757', '1129468969779204209'];
 
 module.exports = {
     name: 'election_admin',
