@@ -40,7 +40,7 @@ module.exports = {
         
         // Create an embed for better formatting
         const pingEmbed = new EmbedBuilder()
-            .setTitle('📊 Latency & Performance Test Results')
+            .setTitle('Latency & Performance Test Results')
             .setColor(apiLatency > 200 || rttTime > 500 ? '#FF9900' : '#00CC66')
             .addFields(
                 { 

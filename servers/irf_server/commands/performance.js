@@ -47,7 +47,7 @@ module.exports = {
         
         // Create detailed performance embed
         const performanceEmbed = new EmbedBuilder()
-            .setTitle('🔧 Performance Diagnostics')
+            .setTitle('Performance Diagnostics')
             .setColor(getPerformanceStatus() === '🟢 Optimal' ? '#00CC66' : '#FF9900')
             .addFields(
                 {
