@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { Admin, Vote, Participation } = require('../../../DBModels/election'); // Adjust path as needed
 const { logevent } = require('../../../permissions.json').irf;
-    const { interactionEmbed } = require('../../../functions');
+const { interactionEmbed } = require('../../../functions');
 
 
 module.exports = {

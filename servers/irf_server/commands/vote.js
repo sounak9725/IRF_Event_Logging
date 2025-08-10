@@ -51,7 +51,7 @@ module.exports = {
       const username = interaction.user.username;
       const guildId = interaction.guild.id;
 
-      // ✅ Check if election is active
+      //Check if election is active
       const adminDoc = await Admin.findOne();
       if (!adminDoc || !adminDoc.isElectionActive) {
         return await interaction.editReply({
@@ -91,12 +91,12 @@ module.exports = {
       );
 
       const voteEmbed = new EmbedBuilder()
-        .setTitle('✅ Vote Recorded Successfully!')
+        .setTitle('Vote Recorded Successfully!')
         .setColor('#00ff00')
         .setDescription(`Your vote has been recorded for this election.`)
         .addFields(
-          { name: '👤 Candidate', value: candidateName, inline: true },
-          { name: '🏛️ Party', value: party, inline: true }
+          { name: 'Candidate', value: candidateName, inline: true },
+          { name: 'Party', value: party, inline: true }
         )
         .setFooter({ text: `Voter: ${username}`, iconURL: interaction.user.displayAvatarURL() })
         .setTimestamp();
