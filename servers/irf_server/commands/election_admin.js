@@ -285,60 +285,100 @@ async function handleListParties(interaction, adminDoc) {
     await interaction.editReply({ embeds: [embed], ephemeral: true });
 }
 
-async function handleElectionStatus(interaction, adminDoc) {
-    const totalVotes = await Vote.countDocuments({ guildId: interaction.guild.id });
-    const totalParticipants = await Participation.countDocuments({ guildId: interaction.guild.id });
+async function handleResetVotes(interaction, adminDoc) {
+    const confirm = interaction.options.getBoolean('confirm');
 
-    const embed = new EmbedBuilder()
-        .setTitle('Election Status')
-        .setColor(adminDoc.isElectionActive ? '#00ff00' : '#ff0000')
-        .addFields(
-            {
-                name: 'Election Status',
-                value: adminDoc.isElectionActive ? '🟢 Active' : '🔴 Inactive',
-                inline: true
-            },
-            {
-                name: 'Election Window',
-                value: adminDoc.electionStart && adminDoc.electionDurationHours
-                    ? `<t:${Math.floor(new Date(adminDoc.electionStart).getTime() / 1000)}:f> to <t:${Math.floor(new Date(adminDoc.electionStart).getTime() / 1000) + (adminDoc.electionDurationHours * 3600)}:f>`
-                    : 'Not set',
-                inline: true
-            },
-            {
-                name: 'Announcement Channel',
-                value: adminDoc.announcementChannel ? `<#${adminDoc.announcementChannel}>` : 'Not set',
-                inline: true
-            },
-            {
-                name: 'Total Votes Cast',
-                value: totalVotes.toString(),
-                inline: true
-            },
-            {
-                name: 'Total Participants',
-                value: totalParticipants.toString(),
-                inline: true
-            },
-            {
-                name: 'Total Parties',
-                value: adminDoc.parties.length.toString(),
-                inline: true
-            },
-            {
-                name: 'Total Candidates',
-                value: adminDoc.candidates.length.toString(),
-                inline: true
-            },
-            {
-                name: 'Last Updated',
-                value: `<t:${Math.floor(adminDoc.updatedAt.getTime() / 1000)}:R>`,
-                inline: true
-            }
-        )
-        .setTimestamp();
+    if (!confirm) {
+        return await interaction.editReply({
+            content: '❌ You must set the confirm option to `true` to reset all votes.',
+            ephemeral: true
+        });
+    }
 
-    await interaction.editReply({ embeds: [embed], ephemeral: true });
+    const guildId = interaction.guild.id;
+    console.log(`Starting reset for guild: ${guildId}`);
+
+    try {
+        // Debug: List all data before deletion
+        console.log('=== PRE-DELETION DEBUG ===');
+        
+        const allVotes = await Vote.find({ guildId: guildId });
+        const allParticipation = await Participation.find({ guildId: guildId });
+        
+        console.log(`Found ${allVotes.length} votes for guild ${guildId}:`);
+        allVotes.forEach((vote, index) => {
+            console.log(`  Vote ${index + 1}: User ${vote.userId} voted for ${vote.candidateName} (${vote.party})`);
+        });
+        
+        console.log(`Found ${allParticipation.length} participation records for guild ${guildId}:`);
+        allParticipation.forEach((part, index) => {
+            console.log(`  Participation ${index + 1}: User ${part.userId} (${part.username})`);
+        });
+
+        // Count before deletion
+        const votesToDelete = await Vote.countDocuments({ guildId: guildId });
+        const participationToDelete = await Participation.countDocuments({ guildId: guildId });
+        
+        console.log(`About to delete: ${votesToDelete} votes, ${participationToDelete} participation records`);
+        
+        if (votesToDelete === 0 && participationToDelete === 0) {
+            return await interaction.editReply({
+                content: `❌ No votes or participation records found for this guild (${guildId}).`,
+                ephemeral: true
+            });
+        }
+
+        // Perform deletions
+        console.log('Executing deletions...');
+        const voteDeleteResult = await Vote.deleteMany({ guildId: guildId });
+        const participationDeleteResult = await Participation.deleteMany({ guildId: guildId });
+        
+        console.log(`Vote deletion result:`, voteDeleteResult);
+        console.log(`Participation deletion result:`, participationDeleteResult);
+
+        // Verify deletion
+        console.log('=== POST-DELETION VERIFICATION ===');
+        const remainingVotes = await Vote.countDocuments({ guildId: guildId });
+        const remainingParticipation = await Participation.countDocuments({ guildId: guildId });
+        
+        console.log(`Remaining votes: ${remainingVotes}`);
+        console.log(`Remaining participation: ${remainingParticipation}`);
+        
+        if (remainingVotes > 0 || remainingParticipation > 0) {
+            console.warn(`⚠️ WARNING: Some data remains after deletion!`);
+            
+            // List remaining data
+            const stillThere = await Vote.find({ guildId: guildId });
+            console.log('Remaining votes:', stillThere);
+            
+            const stillThereParticipation = await Participation.find({ guildId: guildId });
+            console.log('Remaining participation:', stillThereParticipation);
+        }
+
+        // Reset election status
+        adminDoc.isElectionActive = false;
+        adminDoc.electionStart = null;
+        adminDoc.electionDurationHours = null;
+        await adminDoc.save();
+
+        await interaction.editReply({
+            content: `✅ **Reset completed!**\n\n` +
+                     `**Votes:** ${voteDeleteResult.deletedCount}/${votesToDelete} deleted\n` +
+                     `**Participation:** ${participationDeleteResult.deletedCount}/${participationToDelete} deleted\n` +
+                     `**Remaining votes:** ${remainingVotes}\n` +
+                     `**Remaining participation:** ${remainingParticipation}\n\n` +
+                     `${remainingVotes > 0 || remainingParticipation > 0 ? '⚠️ Some data may still remain - check console logs' : '✅ All data successfully removed'}\n\n` +
+                     `⚠️ **Warning:** This action cannot be undone.`,
+            ephemeral: true
+        });
+
+    } catch (error) {
+        console.error('Error during vote reset:', error);
+        await interaction.editReply({
+            content: `❌ An error occurred: ${error.message}\nCheck console for details.`,
+            ephemeral: true
+        });
+    }
 }
 
 async function handleResetVotes(interaction, adminDoc) {

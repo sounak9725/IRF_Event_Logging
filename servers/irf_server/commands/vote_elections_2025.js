@@ -30,10 +30,10 @@ const candidateChoices = [
 ];
 
 module.exports = {
-  name: 'vote',
+  name: 'vote_elections_2025',
   description: 'Vote for a candidate in the current election',
   data: new SlashCommandBuilder()
-    .setName('vote')
+    .setName('vote_elections_2025')
     .setDescription('Vote for a candidate in the current election')
     .addStringOption(option =>
       option.setName('candidate')
