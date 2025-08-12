@@ -227,93 +227,97 @@ function setupGracefulShutdown() {
 // Function to load commands for a specific guild
 function loadCommandsForGuild(guildId) {
   const isAdminServer = guildId === config.discord.adminServerId;
+  const commands = [];
+  const loadedCommandNames = new Set(); // Track commands loaded for THIS guild only
 
-  if (isAdminServer) {
-      console.log(`[CMD-LOAD] Loading all commands for admin server: ${guildId}`);
-      const commands = [];
+  // Helper function to load commands from a directory
+  function loadCommandsFromDirectory(commandsDir, context = "") {
+    if (!fs.existsSync(commandsDir)) return [];
+    
+    const commandFiles = fs.readdirSync(commandsDir).filter(file => file.endsWith('.js'));
+    const loadedCommands = [];
+    
+    for (const file of commandFiles) {
+      try {
+        const commandPath = path.join(commandsDir, file);
+        delete require.cache[require.resolve(commandPath)];
+        const command = require(commandPath);
 
-      // Load commands from all server folders
-      const serversDir = path.join(__dirname, "servers");
-      if (!fs.existsSync(serversDir)) {
-          console.warn(`[CMD-LOAD] Servers directory not found: ${serversDir}`);
-          return commands;
+        if (!command.data) {
+          console.warn(`[CMD-LOAD] Command ${file} is missing 'data' property${context}`);
+          continue;
+        }
+
+        if (!command.run) {
+          console.warn(`[CMD-LOAD] Command ${file} is missing a 'run' method${context}`);
+          continue;
+        }
+
+        // Check if command already exists in THIS guild's loading context
+        if (loadedCommandNames.has(command.data.name)) {
+          console.warn(`[CMD-LOAD] Command ${command.data.name} already loaded for this guild, skipping duplicate${context}`);
+          continue;
+        }
+
+        // Add to global commands collection (this will be overwritten by other guilds, but that's fine)
+        client.commands.set(command.data.name, command);
+        loadedCommands.push(command.data.toJSON());
+        loadedCommandNames.add(command.data.name);
+        console.log(`[CMD-LOAD] Loaded command: ${command.data.name}${context}`);
+        
+      } catch (error) {
+        console.error(`[CMD-LOAD] Failed to load command from ${file}${context}`, error);
       }
-      
-      const serverFolders = fs.readdirSync(serversDir);
-
-      for (const folder of serverFolders) {
-          const commandsDir = path.join(serversDir, folder, "commands");
-          if (!fs.existsSync(commandsDir)) continue;
-
-          const commandFiles = fs.readdirSync(commandsDir).filter(file => file.endsWith('.js'));
-          for (const file of commandFiles) {
-              try {
-                  const commandPath = path.join(commandsDir, file);
-                  delete require.cache[require.resolve(commandPath)];
-                  const command = require(commandPath);
-
-                  if (command.data) {
-                      if (!command.run) {
-                          console.warn(`[CMD-LOAD] Command ${file} is missing a 'run' method`);
-                          continue;
-                      }
-
-                      client.commands.set(command.data.name, command);
-                      commands.push(command.data.toJSON());
-                      console.log(`[CMD-LOAD] Loaded command: ${command.data.name} from ${folder}`);
-                  } else {
-                      console.warn(`[CMD-LOAD] Command ${file} is missing 'data' property`);
-                  }
-              } catch (error) {
-                  console.error(`[CMD-LOAD] Failed to load command from ${file} in ${folder}`, error);
-              }
-          }
-      }
-
-      return commands;
+    }
+    
+    return loadedCommands;
   }
 
-  // Default behavior for non-admin servers
+  // First, always load common commands for ALL guilds
+  const commonCommandsDir = path.join(__dirname, "servers", "common", "commands");
+  console.log(`[CMD-LOAD] Loading common commands for guild: ${guildId}`);
+  const commonCommands = loadCommandsFromDirectory(commonCommandsDir, " (common)");
+  commands.push(...commonCommands);
+
+  if (isAdminServer) {
+    console.log(`[CMD-LOAD] Loading all server-specific commands for admin server: ${guildId}`);
+
+    // Load commands from all server folders (excluding common)
+    const serversDir = path.join(__dirname, "servers");
+    if (!fs.existsSync(serversDir)) {
+      console.warn(`[CMD-LOAD] Servers directory not found: ${serversDir}`);
+      return commands;
+    }
+    
+    const serverFolders = fs.readdirSync(serversDir).filter(folder => folder !== 'common');
+
+    for (const folder of serverFolders) {
+      const commandsDir = path.join(serversDir, folder, "commands");
+      const folderCommands = loadCommandsFromDirectory(commandsDir, ` from ${folder}`);
+      commands.push(...folderCommands);
+    }
+
+    return commands;
+  }
+
+  // Default behavior for non-admin servers - load server-specific commands
   const ministry = utility.ministries.find(m => m.serverID === guildId);
   if (!ministry) {
-      console.warn(`[CMD-LOAD] No ministry found for guild ID: ${guildId}`);
-      return [];
+    console.warn(`[CMD-LOAD] No ministry found for guild ID: ${guildId}, using common commands only`);
+    return commands;
   }
 
   const safeFolderName = ministry.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
   const serverDir = path.join(__dirname, "servers", safeFolderName, "commands");
 
   if (!fs.existsSync(serverDir)) {
-      console.warn(`[CMD-LOAD] No commands directory found for server: ${ministry.name}`);
-      return [];
+    console.warn(`[CMD-LOAD] No commands directory found for server: ${ministry.name}, using common commands only`);
+    return commands;
   }
 
-  console.log(`[CMD-LOAD] Loading commands for server: ${ministry.name}`);
-  const commandFiles = fs.readdirSync(serverDir).filter(file => file.endsWith('.js'));
-  const commands = [];
-
-  for (const file of commandFiles) {
-      try {
-          const commandPath = path.join(serverDir, file);
-          delete require.cache[require.resolve(commandPath)];
-          const command = require(commandPath);
-
-          if (command.data) {
-              if (!command.run) {
-                  console.warn(`[CMD-LOAD] Command ${file} is missing a 'run' method`);
-                  continue;
-              }
-
-              client.commands.set(command.data.name, command);
-              commands.push(command.data.toJSON());
-              console.log(`[CMD-LOAD] Loaded command: ${command.data.name} for server: ${ministry.name}`);
-          } else {
-              console.warn(`[CMD-LOAD] Command ${file} is missing 'data' property`);
-          }
-      } catch (error) {
-          console.error(`[CMD-LOAD] Failed to load command from ${file} for server: ${ministry.name}`, error);
-      }
-  }
+  console.log(`[CMD-LOAD] Loading server-specific commands for server: ${ministry.name}`);
+  const serverCommands = loadCommandsFromDirectory(serverDir, ` for server: ${ministry.name}`);
+  commands.push(...serverCommands);
 
   return commands;
 }

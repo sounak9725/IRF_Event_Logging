@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { Vote, Participation, Admin } = require('../../../DBModels/election');
 const { sheets } = require('../../../utils/googleSheetsAuth');
 
@@ -44,7 +44,7 @@ module.exports = {
 
   run: async(client, interaction) => {
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const candidateChoice = interaction.options.getString('candidate');
       const userId = interaction.user.id;
