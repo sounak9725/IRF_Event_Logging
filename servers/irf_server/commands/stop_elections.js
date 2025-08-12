@@ -18,13 +18,6 @@ module.exports = {
              return interactionEmbed(3, "[ERR-UPRM]", 'Not proper permissions', interaction, client, [true, 30]);
              }
 
-            // Check if user has admin permissions
-            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-                return await interaction.editReply({
-                    content: '❌ You need Administrator permissions to use this command.',
-                    ephemeral: true
-                });
-            }
 
             // Get admin document
             const adminDoc = await Admin.findOne();
