@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFlags } = require('discord.js');
-const axios = require('axios'); // Import axios for API calls
-const PasswordModel = require('../../../DBModels/Password'); // Import the password model
+const axios = require('axios');
+const PasswordModel = require('../../../DBModels/Password'); 
 const { interactionEmbed } = require('../../../functions');
 
 module.exports = {
