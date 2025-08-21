@@ -212,10 +212,6 @@ module.exports = {
         .addStringOption(option => 
             option.setName('notes')
                 .setDescription('Notes for AU (optional)')
-                .setRequired(true))
-        .addBooleanOption(option => 
-            option.setName('double_quota')
-                .setDescription('Is this a double quota event?')
                 .setRequired(true)),
 
     /**
@@ -273,7 +269,6 @@ module.exports = {
             const eventDuration = interaction.options.getInteger('event_duration');
             const notes = interaction.options.getString('notes') || '';
             const password = "HARDCODE"; // Placeholder for password
-            const doubleQuota = interaction.options.getBoolean('double_quota');
             
             // Validate the proof link
             if (!proof || !proof.startsWith('http')) {
@@ -320,7 +315,7 @@ module.exports = {
                 eventDuration.toString(),// L - Total time (minutes)
                 notes,                   // M - Notes for AU
                 password,                // N - Individual password
-                doubleQuota ? 'Yes' : 'No'// O - Double Quota?
+                'No'                      // O - Double Quota?
             ];
             
             try {
@@ -382,7 +377,6 @@ module.exports = {
                         { name: 'Co-Hosts', value: coHosts || 'None', inline: true },
                         { name: 'Attendee Count', value: attendeeCount.toString(), inline: true },
                         { name: 'Duration (min)', value: eventDuration.toString(), inline: true },
-                        { name: 'Double Quota', value: doubleQuota ? 'Yes' : 'No', inline: true },
                         { name: 'Proof', value: `[View Image](${proof})`, inline: true }
                     )
                     .setTimestamp()
