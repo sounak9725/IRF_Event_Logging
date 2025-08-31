@@ -22,10 +22,10 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('by_offender_id')
-                .setDescription('Search cases by offender Discord ID')
+                .setDescription('Search cases by offender Roblox ID')
                 .addStringOption(option =>
                     option.setName('user_id')
-                        .setDescription('Discord user ID to search for')
+                        .setDescription('Roblox user ID to search for')
                         .setRequired(true)))
         .addSubcommand(subcommand =>
             subcommand
