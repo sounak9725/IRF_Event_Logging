@@ -2,6 +2,8 @@
 const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getMPDisciplineCaseModel } = require('../../../DBModels/mpDiscipline');
 const { interactionEmbed } = require('../../../functions');
+const { case_search } = require("../../../permissions.json")["cda"];
+
 
 module.exports = {
     name: 'case_search',
@@ -63,7 +65,20 @@ module.exports = {
      */
     run: async (client, interaction) => {
         await interaction.deferReply();
-        
+            const hasRole = ca.some((roleId) =>
+              interaction.member.roles.cache.has(roleId)
+            );
+            if (!hasRole) {
+              return interactionEmbed(
+                3,
+                "[ERR-UPRM]",
+                "Not proper permissions",
+                interaction,
+                client,
+                [true, 30]
+              );
+            }
+            
         try {
             // Get the MP Discipline model using the separate connection
             const MPDisciplineCase = getMPDisciplineCaseModel(client.mpDisciplineConnection);
