@@ -65,7 +65,7 @@ module.exports = {
      */
     run: async (client, interaction) => {
         await interaction.deferReply();
-            const hasRole = ca.some((roleId) =>
+            const hasRole = case_search.some((roleId) =>
               interaction.member.roles.cache.has(roleId)
             );
             if (!hasRole) {
@@ -78,7 +78,7 @@ module.exports = {
                 [true, 30]
               );
             }
-            
+
         try {
             // Get the MP Discipline model using the separate connection
             const MPDisciplineCase = getMPDisciplineCaseModel(client.mpDisciplineConnection);
