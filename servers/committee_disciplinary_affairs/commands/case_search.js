@@ -3,7 +3,73 @@ const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, ActionRow
 const { getMPDisciplineCaseModel } = require('../../../DBModels/mpDiscipline');
 const { interactionEmbed } = require('../../../functions');
 const { case_search } = require("../../../permissions.json")["cda"];
+const axios = require('axios'); // Make sure to install: npm install axios
 
+// Helper function to get username history from Roblox API with rotunnel fallback
+async function getUsernameHistory(username) {
+    try {
+        // First, get user ID from username
+        let userSearchResponse;
+        try {
+            userSearchResponse = await axios.post('https://users.roblox.com/v1/usernames/users', {
+                usernames: [username]
+            });
+        } catch (error) {
+            console.log('Main Roblox API failed, trying rotunnel fallback...');
+            userSearchResponse = await axios.post('https://users.rotunnel.com/v1/usernames/users', {
+                usernames: [username]
+            });
+        }
+        
+        if (!userSearchResponse.data.data || userSearchResponse.data.data.length === 0) {
+            return { currentUsername: username, previousUsernames: [] };
+        }
+        
+        const userId = userSearchResponse.data.data[0].id;
+        
+        // Get username history
+        let historyResponse;
+        try {
+            historyResponse = await axios.get(`https://users.roblox.com/v1/users/${userId}/username-history`, {
+                params: { limit: 100, sortOrder: 'Desc' }
+            });
+        } catch (error) {
+            console.log('Main Roblox API failed for username history, trying rotunnel fallback...');
+            historyResponse = await axios.get(`https://users.rotunnel.com/v1/users/${userId}/username-history`, {
+                params: { limit: 100, sortOrder: 'Desc' }
+            });
+        }
+        
+        const usernameHistory = historyResponse.data.data || [];
+        const previousUsernames = usernameHistory.map(entry => entry.name).filter(name => name !== username);
+        
+        return {
+            currentUsername: username,
+            previousUsernames: previousUsernames,
+            userId: userId
+        };
+    } catch (error) {
+        console.error('Error fetching username history (both APIs failed):', error.message);
+        return { currentUsername: username, previousUsernames: [] };
+    }
+}
+
+// Helper function to get username history by user ID
+async function getUsernameHistoryById(userId) {
+    try {
+        const historyResponse = await axios.get(`https://users.roblox.com/v1/users/${userId}/username-history`, {
+            params: { limit: 100, sortOrder: 'Desc' }
+        });
+        
+        const usernameHistory = historyResponse.data.data || [];
+        const allUsernames = usernameHistory.map(entry => entry.name);
+        
+        return allUsernames;
+    } catch (error) {
+        console.error('Error fetching username history by ID:', error.message);
+        return [];
+    }
+}
 
 module.exports = {
     name: 'case_search',
@@ -14,7 +80,7 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('by_offender')
-                .setDescription('Search cases by offender username')
+                .setDescription('Search cases by offender username (includes previous usernames)')
                 .addStringOption(option =>
                     option.setName('username')
                         .setDescription('Username to search for')
@@ -65,19 +131,20 @@ module.exports = {
      */
     run: async (client, interaction) => {
         await interaction.deferReply();
-            const hasRole = case_search.some((roleId) =>
-              interaction.member.roles.cache.has(roleId)
-            );
-            if (!hasRole) {
-              return interactionEmbed(
+        
+        const hasRole = case_search.some((roleId) =>
+            interaction.member.roles.cache.has(roleId)
+        );
+        if (!hasRole) {
+            return interactionEmbed(
                 3,
                 "[ERR-UPRM]",
                 "Not proper permissions",
                 interaction,
                 client,
                 [true, 30]
-              );
-            }
+            );
+        }
 
         try {
             // Get the MP Discipline model using the separate connection
@@ -159,17 +226,39 @@ module.exports = {
                 return embed;
             };
 
+            // Enhanced function to find aliases by name with Roblox API integration
             async function findAliasesByName(name) {
-                // Find offenderIds that have this offender name
-                const idMatches = await MPDisciplineCase.find({ offender: { $regex: name, $options: 'i' } }).select('offenderId').limit(50);
+                // Get username history from Roblox API
+                const robloxHistory = await getUsernameHistory(name);
+                const allRobloxNames = [robloxHistory.currentUsername, ...robloxHistory.previousUsernames];
+                
+                // Find offenderIds that have any of these names
+                const idMatches = await MPDisciplineCase.find({ 
+                    offender: { $in: allRobloxNames.map(n => new RegExp(n, 'i')) } 
+                }).select('offenderId').limit(50);
+                
                 const offenderIds = [...new Set(idMatches.map(d => d.offenderId).filter(v => v && v !== 'Unknown'))];
-                // Find other names tied to those IDs
-                let aliasNames = [];
+                
+                // Also add the Roblox user ID if we found it
+                if (robloxHistory.userId) {
+                    offenderIds.push(String(robloxHistory.userId));
+                }
+                
+                // Find other names tied to those IDs in the database
+                let dbAliasNames = [];
                 if (offenderIds.length) {
                     const nameDocs = await MPDisciplineCase.find({ offenderId: { $in: offenderIds } }).select('offender').limit(200);
-                    aliasNames = [...new Set(nameDocs.map(d => d.offender).filter(Boolean))];
+                    dbAliasNames = [...new Set(nameDocs.map(d => d.offender).filter(Boolean))];
                 }
-                return { offenderIds, aliasNames };
+                
+                // Combine all known names
+                const allKnownNames = [...new Set([...allRobloxNames, ...dbAliasNames])];
+                
+                return { 
+                    offenderIds, 
+                    aliasNames: allKnownNames,
+                    robloxHistory: robloxHistory.previousUsernames.length > 0 ? robloxHistory : null
+                };
             }
             
             const subcommand = interaction.options.getSubcommand();
@@ -180,14 +269,20 @@ module.exports = {
             switch (subcommand) {
                 case 'by_offender':
                     const username = interaction.options.getString('username');
-                    const { offenderIds, aliasNames } = await findAliasesByName(username);
+                    
+                    // Send a loading message since Roblox API calls might take time
+                    await interaction.editReply({ content: '🔍 Searching cases and fetching username history...' });
+                    
+                    const { offenderIds, aliasNames, robloxHistory } = await findAliasesByName(username);
 
                     const orConditions = [
                         { offender: { $regex: username, $options: 'i' } },
                         { details: { $regex: username, $options: 'i' } }
                     ];
-                    if (aliasNames.length) {
-                        orConditions.push({ offender: { $in: aliasNames } });
+                    
+                    // Add all known aliases to search conditions
+                    if (aliasNames.length > 1) {
+                        orConditions.push({ offender: { $in: aliasNames.map(name => new RegExp(name, 'i')) } });
                     }
                     if (offenderIds.length) {
                         orConditions.push({ offenderId: { $in: offenderIds } });
@@ -195,21 +290,49 @@ module.exports = {
 
                     cases = await MPDisciplineCase.find({ $or: orConditions }).sort({ createdAt: -1 }).limit(50);
 
-                    const aliasNote = [username, ...aliasNames.filter(n => n.toLowerCase() !== username.toLowerCase())]
-                        .filter(Boolean)
-                        .slice(0, 10) // keep concise
-                        .join(', ');
+                    // Enhanced description with Roblox history info
+                    const aliasNote = aliasNames.slice(0, 10).join(', ');
                     searchTitle = `Case Search Results for: ${username}`;
-                    searchDescription = `Found ${cases.length} case(s). Known usernames: ${aliasNote || username}`;
+                    
+                    let descriptionParts = [`Found ${cases.length} case(s).`];
+                    if (robloxHistory && robloxHistory.previousUsernames.length > 0) {
+                        descriptionParts.push(`🔍 **Previous usernames found:** ${robloxHistory.previousUsernames.slice(0, 5).join(', ')}${robloxHistory.previousUsernames.length > 5 ? '...' : ''}`);
+                    }
+                    descriptionParts.push(`**All searched names:** ${aliasNote}`);
+                    
+                    searchDescription = descriptionParts.join('\n');
                     break;
 
                 case 'by_offender_id':
                     const userId = interaction.options.getString('user_id');
-                    cases = await MPDisciplineCase.find({ offenderId: userId }).sort({ createdAt: -1 }).limit(50);
-                    // Also collect aliases for display
+                    
+                    // Send loading message
+                    await interaction.editReply({ content: '🔍 Searching cases and fetching username history...' });
+                    
+                    // Get all usernames for this ID from Roblox API
+                    const robloxUsernames = await getUsernameHistoryById(userId);
+                    
+                    // Search by both user ID and any known usernames
+                    const searchConditions = [{ offenderId: userId }];
+                    if (robloxUsernames.length > 0) {
+                        searchConditions.push({ offender: { $in: robloxUsernames.map(name => new RegExp(name, 'i')) } });
+                    }
+                    
+                    cases = await MPDisciplineCase.find({ $or: searchConditions }).sort({ createdAt: -1 }).limit(50);
+                    
+                    // Also collect aliases from database for display
                     const distinctNames = [...new Set(cases.map(c => c.offender).filter(Boolean))];
+                    const allKnownNames = [...new Set([...robloxUsernames, ...distinctNames])];
+                    
                     searchTitle = `Case Search Results for User ID: ${userId}`;
-                    searchDescription = `Found ${cases.length} case(s). Known usernames: ${distinctNames.join(', ') || 'Unknown'}`;
+                    
+                    let idDescriptionParts = [`Found ${cases.length} case(s).`];
+                    if (robloxUsernames.length > 0) {
+                        idDescriptionParts.push(`🔍 **Roblox username history:** ${robloxUsernames.slice(0, 5).join(', ')}${robloxUsernames.length > 5 ? '...' : ''}`);
+                    }
+                    idDescriptionParts.push(`**All known usernames:** ${allKnownNames.join(', ') || 'Unknown'}`);
+                    
+                    searchDescription = idDescriptionParts.join('\n');
                     break;
 
                 case 'by_case_id':
@@ -245,11 +368,11 @@ module.exports = {
             if (cases.length === 0) {
                 const noResultsEmbed = new EmbedBuilder()
                     .setTitle('No Cases Found')
-                    .setDescription('No cases match your search criteria.')
+                    .setDescription('No cases match your search criteria. This search included previous Roblox usernames where applicable.')
                     .setColor('#FF6B6B')
                     .setTimestamp();
                 
-                return interaction.editReply({ embeds: [noResultsEmbed] });
+                return interaction.editReply({ embeds: [noResultsEmbed], components: [] });
             }
 
             // Paginated response with buttons
@@ -263,7 +386,7 @@ module.exports = {
                 );
 
             const firstEmbed = await buildEmbedForPage({ title: searchTitle, description: searchDescription, cases, page });
-            const msg = await interaction.editReply({ embeds: [firstEmbed], components: [buildButtons()] });
+            const msg = await interaction.editReply({ embeds: [firstEmbed], components: [buildButtons()], content: null });
 
             // Collector for 3 minutes
             const collector = msg.createMessageComponentCollector({ time: 3 * 60 * 1000, filter: (i) => i.user.id === interaction.user.id });
