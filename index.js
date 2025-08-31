@@ -84,8 +84,9 @@ async function connectDatabase() {
     family: 4
   };
 
+  // Main database connection (existing)
   mongoose.connection.on('connected', () => {
-    console.log('Mongoose connected to database');
+    console.log('Mongoose connected to main database');
   });
 
   mongoose.connection.on('error', (err) => {
@@ -100,19 +101,19 @@ async function connectDatabase() {
   
   async function connectWithRetry() {
     if (retryCount >= MAX_DB_RETRY_ATTEMPTS) {
-      console.error(`Failed to connect to MongoDB after ${MAX_DB_RETRY_ATTEMPTS} attempts.`);
-      console.warn('Bot will continue without database functionality.');
+      console.error(`Failed to connect to main MongoDB after ${MAX_DB_RETRY_ATTEMPTS} attempts.`);
+      console.warn('Bot will continue without main database functionality.');
       return false;
     }
     
     try {
       retryCount++;
       await mongoose.connect(config.bot.uri, connectOptions);
-      console.log(`Connected to MongoDB (attempt ${retryCount})`);
+      console.log(`Connected to main MongoDB (attempt ${retryCount})`);
       retryCount = 0; // Reset counter on success
       return true;
     } catch (err) {
-      console.error(`Failed to connect to MongoDB (attempt ${retryCount}/${MAX_DB_RETRY_ATTEMPTS})`, err);
+      console.error(`Failed to connect to main MongoDB (attempt ${retryCount}/${MAX_DB_RETRY_ATTEMPTS})`, err);
       
       if (retryCount < MAX_DB_RETRY_ATTEMPTS) {
         const delay = Math.min(5000 * retryCount, 30000); // Exponential backoff with 30s max
@@ -124,7 +125,41 @@ async function connectDatabase() {
     }
   }
 
-  return connectWithRetry();
+  const mainDbResult = await connectWithRetry();
+  
+  // Second database connection for MP discipline cases
+  if (config.bot.uri1) {
+    try {
+      // Connect to the existing mp_discipline database
+      const mpDisciplineConnection = mongoose.createConnection(config.bot.uri1, {
+        ...connectOptions,
+        dbName: 'mp_discipline' // Explicitly specify the database name
+      });
+      
+      mpDisciplineConnection.on('connected', () => {
+        console.log('Connected to existing MP Discipline database: mp_discipline');
+      });
+      
+      mpDisciplineConnection.on('error', (err) => {
+        console.error('MP Discipline database connection error:', err);
+      });
+      
+      mpDisciplineConnection.on('disconnected', () => {
+        console.warn('MP Discipline database disconnected');
+      });
+      
+      // Store the connection for use in models
+      client.mpDisciplineConnection = mpDisciplineConnection;
+      
+    } catch (err) {
+      console.error('Failed to connect to MP Discipline database:', err);
+      console.warn('MP Discipline functionality will be limited.');
+    }
+  } else {
+    console.warn('No MP Discipline database URI configured (uri1).');
+  }
+
+  return mainDbResult;
 }
 
 // Ensure proper election-related indexes and migrate old ones
@@ -323,7 +358,7 @@ function loadCommandsForGuild(guildId) {
 }
 
 //#region Events
-client.once("ready", async () => {
+client.once("clientReady", async () => {
 try {
   // Setup bot activities (keeping your existing code)
   const activities = [

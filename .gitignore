@@ -1,3 +1,4 @@
 node_modules
 config.json
 key_file.json
+.venv

@@ -1,4 +1,8 @@
 {
+  "CDAchannels": {
+    "graphs": "1408818130356142190"
+  },
+
   "ministries": [
     {
       "name": "National Defense Division",
@@ -39,6 +43,10 @@
     {
       "name": "Game Administration",
       "serverID": "835989970556158062"
+    },
+    {
+      "name": "Committee Disciplinary Affairs",
+      "serverID": "1300635431418855515"
     }
   ]
 }
