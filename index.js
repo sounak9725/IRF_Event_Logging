@@ -13,12 +13,17 @@ const { Routes } = require('discord-api-types/v10');
 const { manageGuildCommands } = require('./commands_cleaning.js');
 const { ApplicationCommandOptionType } = require("discord-api-types/v10");
 const { interactionEmbed, toConsole } = require("./functions.js");
+const { logger } = require('./utils/logger');
+const { metrics } = require('./utils/metrics');
+const { HealthCheck } = require('./utils/healthCheck');
 const fs = require("node:fs");
-const config = require("./config.json");
+// Load environment variables
+require('dotenv').config();
 const noblox = require("noblox.js");
 const mongoose = require('mongoose');
 const path = require("path");
 let ready = false;
+let healthCheck = null;
 const { Vote, Participation } = require('./DBModels/election');
 
 const client = new Client({ 
@@ -108,7 +113,7 @@ async function connectDatabase() {
     
     try {
       retryCount++;
-      await mongoose.connect(config.bot.uri, connectOptions);
+      await mongoose.connect(process.env.MONGODB_URI, connectOptions);
       console.log(`Connected to main MongoDB (attempt ${retryCount})`);
       retryCount = 0; // Reset counter on success
       return true;
@@ -128,10 +133,10 @@ async function connectDatabase() {
   const mainDbResult = await connectWithRetry();
   
   // Second database connection for MP discipline cases
-  if (config.bot.uri1) {
+  if (process.env.MP_DISCIPLINE_URI) {
     try {
       // Connect to the existing mp_discipline database
-      const mpDisciplineConnection = mongoose.createConnection(config.bot.uri1, {
+      const mpDisciplineConnection = mongoose.createConnection(process.env.MP_DISCIPLINE_URI, {
         ...connectOptions,
         dbName: 'mp_discipline' // Explicitly specify the database name
       });
@@ -222,7 +227,7 @@ function setupGracefulShutdown() {
     console.log(`Received ${signal}. Shutting down gracefully...`);
     
     // Log the shutdown - with proper error handling
-    if (ready && client?.user && config?.discord?.logChannel) {
+    if (ready && client?.user && process.env.LOG_CHANNEL_ID) {
       try {
         await toConsole(`Bot shutdown initiated: ${signal}`, new Error().stack, client);
       } catch (e) {
@@ -261,7 +266,7 @@ function setupGracefulShutdown() {
 
 // Function to load commands for a specific guild
 function loadCommandsForGuild(guildId) {
-  const isAdminServer = guildId === config.discord.adminServerId;
+  const isAdminServer = guildId === process.env.ADMIN_SERVER_ID;
   const commands = [];
   const loadedCommandNames = new Set(); // Track commands loaded for THIS guild only
 
@@ -385,9 +390,16 @@ try {
   }
   
   console.log(`Services status: Database: ${dbOk ? 'OK' : 'Limited functionality'}`);
+  
+  // Initialize health monitoring
+  healthCheck = new HealthCheck(client);
+  healthCheck.startPeriodicChecks(5); // Check every 5 minutes
+  
+  // Clean old logs on startup
+  logger.cleanOldLogs(30);
 
   // Set up REST client for command deployment
-  const rest = new REST({ version: '10' }).setToken(config.bot.token);
+  const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
 
   // Clear existing commands collection
   client.commands.clear();
@@ -397,11 +409,11 @@ try {
     const serverId = guild.id;
 
     // Check if the current server is the admin server
-    const isAdminServer = serverId === config.discord.adminServerId;
+    const isAdminServer = serverId === process.env.ADMIN_SERVER_ID;
 
     try {
       const serverCommands = isAdminServer
-        ? loadCommandsForGuild(config.discord.adminServerId) // Load all commands for the admin server
+        ? loadCommandsForGuild(process.env.ADMIN_SERVER_ID) // Load all commands for the admin server
         : loadCommandsForGuild(serverId); // Load specific commands for other servers
 
       // Only attempt to deploy if commands exist for this guild
@@ -424,7 +436,7 @@ try {
   
   // Safe logging with error handling
   try {
-    if (config?.discord?.logChannel) {
+    if (process.env.LOG_CHANNEL_ID) {
       await toConsole("Client has logged in and is ready", new Error().stack, client);
     } else {
       console.log("[INFO] Log channel not configured, skipping console log");
@@ -438,7 +450,7 @@ try {
   
   // Safe error logging
   try {
-    if (config?.discord?.logChannel) {
+    if (process.env.LOG_CHANNEL_ID) {
       await toConsole('Failed during startup', error.stack, client);
     }
   } catch (logError) {
@@ -470,7 +482,17 @@ client.on("interactionCreate", async interaction => {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
       
+      const startTime = Date.now();
       await handleCommand(command, interaction);
+      const executionTime = Date.now() - startTime;
+      
+      // Record metrics
+      metrics.recordCommand(
+        interaction.commandName,
+        interaction.user.id,
+        interaction.guild?.id,
+        executionTime
+      );
     } else if (interaction.type === InteractionType.ModalSubmit) {
       // Handle deny reason modal specifically
       if (interaction.customId.startsWith('deny_reason_modal_')) {
@@ -496,14 +518,31 @@ client.on("interactionCreate", async interaction => {
       const command = client.commands.get(interaction.commandName);
       if (command && command.autocomplete) {
         await command.autocomplete(interaction);
+        metrics.recordCommand(
+          interaction.commandName,
+          interaction.user.id,
+          interaction.guild?.id,
+          0
+        );
       }
     }
   } catch (error) {
     console.error('Error handling interaction:', error);
     
+    // Record error metrics
+    metrics.recordError(
+      'interaction_error',
+      error.message,
+      {
+        commandName: interaction.commandName,
+        userId: interaction.user.id,
+        guildId: interaction.guild?.id
+      }
+    );
+    
     // Safe error logging
     try {
-      if (config?.discord?.logChannel) {
+      if (process.env.LOG_CHANNEL_ID) {
         await toConsole('Interaction handling failed', error.stack, client);
       }
     } catch (logError) {
@@ -533,7 +572,7 @@ async function handleCommand(command, interaction) {
 
   // Safe logging
   try {
-    if (config?.discord?.logChannel) {
+    if (process.env.LOG_CHANNEL_ID) {
       await toConsole(
         `${interaction.user.tag} (${interaction.user.id}) ran command \`${interaction.commandName}\`:\n> ${options.join("\n> ") || "No options"}`,
         new Error().stack,
@@ -549,6 +588,17 @@ async function handleCommand(command, interaction) {
   } catch (error) {
     console.error(`Error executing command ${interaction.commandName}:`, error);
     
+    // Record command error metrics
+    metrics.recordError(
+      'command_execution_error',
+      error.message,
+      {
+        commandName: interaction.commandName,
+        userId: interaction.user.id,
+        guildId: interaction.guild?.id
+      }
+    );
+    
     try {
       await interaction.editReply({
         content: "An error occurred while executing the command. Please try again later.",
@@ -560,7 +610,7 @@ async function handleCommand(command, interaction) {
     
     // Safe error logging
     try {
-      if (config?.discord?.logChannel) {
+      if (process.env.LOG_CHANNEL_ID) {
         await toConsole(error.stack, new Error().stack, client);
       }
     } catch (logError) {
@@ -592,7 +642,7 @@ async function handleModal(interaction) {
     
     // Safe logging
     try {
-      if (config?.discord?.logChannel) {
+      if (process.env.LOG_CHANNEL_ID) {
         await toConsole(`No modal found for: ${modalName}`, new Error().stack, client);
       }
     } catch (logError) {
@@ -602,7 +652,7 @@ async function handleModal(interaction) {
 }
 
 // Start the bot
-client.login(config.bot.token).catch(error => {
+client.login(process.env.BOT_TOKEN).catch(error => {
   console.error('Failed to login:', error);
   process.exit(1);
 });
@@ -618,19 +668,26 @@ client.ws.on('close', (event) => {
 
 client.ws.on('error', (error) => {
   console.error('WebSocket error:', error);
+  metrics.recordError('websocket_error', error.message);
 });
 
-// Performance monitoring
+// Enhanced performance monitoring
 setInterval(() => {
   const wsLatency = client.ws.ping;
   const memoryUsage = process.memoryUsage();
   
   if (wsLatency > 200) {
-    console.warn(`High WebSocket latency detected: ${wsLatency}ms`);
+    logger.warn(`High WebSocket latency detected: ${wsLatency}ms`);
+    metrics.recordError('high_latency', `WebSocket latency: ${wsLatency}ms`);
   }
   
   if (memoryUsage.heapUsed > 100 * 1024 * 1024) { // 100MB
-    console.warn(`High memory usage: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`);
+    const memoryMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
+    logger.warn(`High memory usage: ${memoryMB}MB`);
+    
+    if (memoryMB > 150) {
+      metrics.recordError('high_memory_usage', `Memory usage: ${memoryMB}MB`);
+    }
   }
 }, 60000); // Check every minute
 
@@ -643,7 +700,7 @@ process.on("uncaughtException", (err, origin) => {
   
   // Safe error logging
   try {
-    if (config?.discord?.logChannel) {
+    if (process.env.LOG_CHANNEL_ID) {
       toConsole(`Uncaught Exception:\n${err}\nOrigin: ${origin}`, new Error().stack, client);
     }
   } catch (logError) {
@@ -665,8 +722,8 @@ process.on("unhandledRejection", async (reason, promise) => {
     
     // Safe suppressed error logging
     try {
-      if (config?.discord?.logChannel) {
-        const channel = client.channels.cache.get(config.discord.logChannel);
+      if (process.env.LOG_CHANNEL_ID) {
+        const channel = client.channels.cache.get(process.env.LOG_CHANNEL_ID);
         if (channel) {
           await channel.send(`Suppressed error:\n>>> ${error}`);
         }
@@ -679,7 +736,7 @@ process.on("unhandledRejection", async (reason, promise) => {
 
   // Safe error logging
   try {
-    if (config?.discord?.logChannel) {
+    if (process.env.LOG_CHANNEL_ID) {
       await toConsole(`Unhandled Rejection:\n${error}`, new Error().stack, client);
     }
   } catch (logError) {
@@ -695,7 +752,7 @@ process.on("warning", async (warning) => {
   
   // Safe warning logging
   try {
-    if (config?.discord?.logChannel) {
+    if (process.env.LOG_CHANNEL_ID) {
       await toConsole(`Warning:\n${warning}`, new Error().stack, client);
     }
   } catch (logError) {

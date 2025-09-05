@@ -1,8 +1,8 @@
 // eslint-disable-next-line no-unused-vars
+require('dotenv').config();
 const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFlags } = require('discord.js');
 const { sheets, getCachedSheetData } = require('../../../utils/googleSheetsAuth');
 const { getRowifi, interactionEmbed } = require('../../../functions');
-const config = require('../../../config.json');
 const { logevent } = require('../../../permissions.json').ndd;
 
 // Custom error class for better error handling

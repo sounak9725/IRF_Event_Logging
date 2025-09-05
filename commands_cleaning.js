@@ -1,9 +1,9 @@
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
+require('dotenv').config();
 const fs = require('node:fs');
 const path = require('node:path');
 const utility = require('./utility.json');
-const config = require('./config.json');
 
 /**
  * List all guild commands and optionally delete unexpected ones
@@ -12,7 +12,7 @@ const config = require('./config.json');
  * @param {boolean} [autoCleanup=false] - Automatically remove unexpected commands
  */
 async function manageGuildCommands(client, guildId, autoCleanup = false) {
-  const rest = new REST({ version: '10' }).setToken(config.bot.token);
+  const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
   
   try {
     // Fetch existing commands for this guild

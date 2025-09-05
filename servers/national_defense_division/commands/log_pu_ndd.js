@@ -1,6 +1,6 @@
+require('dotenv').config();
 const { SlashCommandBuilder, EmbedBuilder, CommandInteraction, MessageFlags, CommandInteractionOptionResolver } = require('discord.js');
 const { sheets } = require('../../../utils/googleSheetsAuth');
-const config = require('../../../config.json');
 const { getRowifi, interactionEmbed } = require('../../../functions');
 const { logpu } = require('../../../permissions.json').ndd;
 

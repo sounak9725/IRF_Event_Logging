@@ -56,7 +56,7 @@ module.exports = {
                 pythonArgs.push("--additional-info");
             }
             
-            const pythonProcess = spawn("python", pythonArgs);
+            const pythonProcess = spawn("python3", pythonArgs);
 
             const timeout = setTimeout(async () => {
                 if (!pythonProcess.killed) {

@@ -16,7 +16,7 @@ const {
 } = require("discord.js");
 const { default: fetch } = require("node-fetch");
 const nbx = require("noblox.js"); // Make sure noblox.js is imported
-const config = require("./config.json");
+require('dotenv').config();
 const fs = require("fs");
 const path = require("path");
 const { promisify } = require("util");
@@ -72,10 +72,10 @@ const toConsole = async (message, source, client) => {
     return console.error(
       `One or more of the required parameters are missing.\n\n> message: ${message}\n> source: ${source}\n> client: ${client}`
     );
-  const channel = await client.channels.cache.get(config.discord.logChannel);
+  const channel = await client.channels.cache.get(process.env.LOG_CHANNEL_ID);
   if (!channel)
     return console.warn(
-      "[WARN] toConsole called but bot cannot find config.discord.logChannel",
+      "[WARN] toConsole called but bot cannot find LOG_CHANNEL_ID",
       message,
       source
     );
@@ -475,27 +475,27 @@ const getGroup = async (username, groupId) => {
  */
 const getRowifi = async (user, client) => {
   if (!user) return { success: false, error: "No user ID provided" };
-  if (!config?.discord?.mainServer || !config?.bot?.rowifiApiKey) {
+  if (!process.env.MAIN_SERVER_ID || !process.env.ROWIFI_API_KEY) {
     return {
       success: false,
-      error: "Missing configuration (mainServer or API key)",
+      error: "Missing configuration (MAIN_SERVER_ID or ROWIFI_API_KEY)",
     };
   }
 
   try {
     // Debug logging (remove in production)
     console.log(
-      `Making request to: https://api.rowifi.xyz/v3/guilds/${config.discord.mainServer}/members/${user}`
+      `Making request to: https://api.rowifi.xyz/v3/guilds/${process.env.MAIN_SERVER_ID}/members/${user}`
     );
-    console.log(`Token exists: ${!!config.bot.rowifiApiKey}`);
-    console.log(`Token length: ${config.bot.rowifiApiKey?.length || 0}`);
+    console.log(`Token exists: ${!!process.env.ROWIFI_API_KEY}`);
+    console.log(`Token length: ${process.env.ROWIFI_API_KEY?.length || 0}`);
 
     const rowifiRes = await fetch(
-      `https://api.rowifi.xyz/v3/guilds/${config.discord.mainServer}/members/${user}`,
+      `https://api.rowifi.xyz/v3/guilds/${process.env.MAIN_SERVER_ID}/members/${user}`,
       {
         method: "GET",
         headers: {
-          Authorization: `Bot ${config.bot.rowifiApiKey}`,
+          Authorization: `Bot ${process.env.ROWIFI_API_KEY}`,
           "Content-Type": "application/json",
           "User-Agent": "DiscordBot/1.0",
         },
