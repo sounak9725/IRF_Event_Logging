@@ -31,13 +31,39 @@ module.exports = {
                     .setTitle("Error Fetching Roblox User")
                     .setColor(0xFF0000)
                     .setDescription(`Failed to fetch Roblox user with ID ${robloxId}: ${robloxUserResult.error}`);
-                await interaction.reply({ embeds: [errorEmbed] });
+                
+                try {
+                    await interaction.reply({ embeds: [errorEmbed] });
+                } catch (discordError) {
+                    console.error("Failed to send error embed:", discordError);
+                    // Try deferred reply as fallback
+                    try {
+                        await interaction.deferReply();
+                        await interaction.editReply({ embeds: [errorEmbed] });
+                    } catch (fallbackError) {
+                        console.error("All Discord interaction methods failed:", fallbackError);
+                    }
+                }
                 return;
             }
             
             const robloxUser = robloxUserResult.user;
 
-            await interaction.reply(`\`\`\`Fetching badge graph for: ${robloxUser.name} (${robloxId})...\n${additionalInfo ? 'Including enemy groups and friends check...' : ''}\`\`\``);
+            let initialMessage = `\`\`\`Fetching badge graph for: ${robloxUser.name} (${robloxId})...\n${additionalInfo ? 'Including enemy groups and friends check...' : ''}\`\`\``;
+            
+            try {
+                await interaction.reply(initialMessage);
+            } catch (discordError) {
+                console.error("Failed to send initial reply:", discordError);
+                // Try deferred reply as fallback
+                try {
+                    await interaction.deferReply();
+                    await interaction.editReply({ content: initialMessage });
+                } catch (fallbackError) {
+                    console.error("All Discord interaction methods failed:", fallbackError);
+                    return;
+                }
+            }
 
             let accumulatedContent = "```\nFetching badge graph for: " + robloxUser.name + " (" + robloxId + ")...\n" + (additionalInfo ? 'Including enemy groups and friends check...\n' : '') + "```";
 
@@ -131,7 +157,12 @@ module.exports = {
                         accumulatedContent = "```\n" + lines.slice(-15).join('\n') + "\n```";
                     }
                     
-                    await interaction.editReply({ content: accumulatedContent });
+                    try {
+                        await interaction.editReply({ content: accumulatedContent });
+                    } catch (editError) {
+                        console.error("Failed to edit reply during progress update:", editError);
+                        // Continue processing, don't break the flow
+                    }
                     outputBuffer = "";
                     lastMessage = message;
                     lastUpdateTime = now;
@@ -185,7 +216,12 @@ module.exports = {
                         });
                     } catch (e) {
                         console.error("Failed to upload image to CDA channel:", e);
-                        return interaction.followUp("Failed to upload badge image to CDA channel.");
+                        try {
+                            await interaction.followUp("Failed to upload badge image to CDA channel.");
+                        } catch (followUpError) {
+                            console.error("Failed to send followUp message:", followUpError);
+                        }
+                        return;
                     }
 
                     const imageLink = uploadedMessage.attachments.first()?.url;
@@ -206,10 +242,24 @@ module.exports = {
                         .setImage(imageLink)
                         .setTimestamp(new Date());
 
-                    await interaction.followUp({
-                        content: `<@${interaction.user.id}>`,
-                        embeds: [embed]
-                    });
+                    try {
+                        await interaction.followUp({
+                            content: `<@${interaction.user.id}>`,
+                            embeds: [embed]
+                        });
+                    } catch (followUpError) {
+                        console.error("Failed to send final followUp with embed:", followUpError);
+                        // Try sending to the channel directly as fallback
+                        try {
+                            const channel = await client.channels.fetch(runChannelId);
+                            await channel.send({
+                                content: `<@${interaction.user.id}> Badge graph completed for ${robloxUser.name}`,
+                                embeds: [embed]
+                            });
+                        } catch (channelError) {
+                            console.error("All message sending methods failed:", channelError);
+                        }
+                    }
 
                     // Cleanup
                     [imagePath].forEach(filePath => {
@@ -223,15 +273,30 @@ module.exports = {
                     console.error(`Python script exited with code ${code}`);
                     accumulatedContent += `\nAn error occurred while generating the badge graph for ${robloxUser.name} (${robloxId}). Exit code: ${code}`;
                     accumulatedContent = "```\n" + accumulatedContent.replace(/```/g, "").trim() + "\n```";
-                    await interaction.editReply({ content: accumulatedContent });
+                    try {
+                        await interaction.editReply({ content: accumulatedContent });
+                    } catch (editError) {
+                        console.error("Failed to edit reply with error message:", editError);
+                    }
                 }
             });
         } catch (error) {
             console.error(error);
-            if(interaction.replied || interaction.deferred){
-                await interaction.followUp("An unexpected error occurred while generating the badge graph.");
-            } else {
-                await interaction.reply("An unexpected error occurred while generating the badge graph.");
+            try {
+                if(interaction.replied || interaction.deferred){
+                    await interaction.followUp("An unexpected error occurred while generating the badge graph.");
+                } else {
+                    await interaction.reply("An unexpected error occurred while generating the badge graph.");
+                }
+            } catch (finalError) {
+                console.error("Failed to send error message to user:", finalError);
+                // Try sending to channel as last resort
+                try {
+                    const channel = await client.channels.fetch(interaction.channel.id);
+                    await channel.send(`<@${interaction.user.id}> An unexpected error occurred while generating the badge graph.`);
+                } catch (channelError) {
+                    console.error("All error notification methods failed:", channelError);
+                }
             }
         }
     }
