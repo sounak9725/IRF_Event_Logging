@@ -72,8 +72,9 @@ module.exports = {
             const imagePath = path.resolve(graphsDir, `${robloxId}.png`);
             const textPath = path.resolve(graphsDir, `${robloxId}.json`);
 
+            // Ensure graphs directory exists before running Python script
             if (!fs.existsSync(graphsDir)) {
-                fs.mkdirSync(graphsDir);
+                fs.mkdirSync(graphsDir, { recursive: true });
             }
 
             // Pass additional_info flag to Python script
@@ -210,9 +211,32 @@ module.exports = {
 
                     let uploadedMessage;
                     
-                    // Check if image file exists before trying to upload
+                    // Wait a moment for file system to sync, then check if image exists
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
                     if (!fs.existsSync(imagePath)) {
                         console.error(`Image file not found: ${imagePath}`);
+                        
+                        // Check if user has no badges (which is valid)
+                        if (totalBadges === 0) {
+                            const noBadgesEmbed = new EmbedBuilder()
+                                .setTitle(`No Badges Found for ${robloxUser.name}`)
+                                .setColor(0xFFA500)
+                                .setDescription(`User ${robloxUser.name} (${robloxId}) has no badges to display.\n\nThis could mean:\n• The user has no badges\n• The user's badges are set to private\n• The user account doesn't exist`)
+                                .setTimestamp(new Date());
+                            
+                            try {
+                                await interaction.followUp({
+                                    content: `<@${interaction.user.id}>`,
+                                    embeds: [noBadgesEmbed]
+                                });
+                            } catch (followUpError) {
+                                console.error("Failed to send no badges message:", followUpError);
+                            }
+                            return;
+                        }
+                        
+                        // If badges exist but no image, there's a real error
                         try {
                             await interaction.followUp("Badge graph generation failed - image file not created. Please check Python environment and dependencies.");
                         } catch (followUpError) {
