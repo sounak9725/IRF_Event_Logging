@@ -1,4 +1,6 @@
 import requests
+import matplotlib
+matplotlib.use('Agg')  # Set backend before importing pyplot
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime, timezone
@@ -295,10 +297,14 @@ def plot_cumulative_badges(display_name: str, user_id: str, dates: List[str], hi
     Graph the cumulative total of badges over time and save the plot as an image file.
     Enhanced with color coding based on badge creators.
     """
+    print(f"Starting plot generation for {display_name}")
+    
     if not dates:
         print("No badge dates to plot.")
         return
 
+    print(f"Processing {len(dates)} badge dates")
+    
     # Sort badges by awarded date
     y_values = [convertDateToDatetime(date) for date in dates]
     y_values.sort()
@@ -310,6 +316,8 @@ def plot_cumulative_badges(display_name: str, user_id: str, dates: List[str], hi
         curr_count += 1
         cumulative_counts.append(curr_count)
 
+    print(f"Calculated cumulative counts: {len(cumulative_counts)} points")
+
     # Count badges per creator for color coding
     creator_count = {}
     for badge in badges:
@@ -317,56 +325,81 @@ def plot_cumulative_badges(display_name: str, user_id: str, dates: List[str], hi
         if creator_id:
             creator_count[creator_id] = creator_count.get(creator_id, 0) + 1
 
-    # Plot the cumulative count over time
-    plt.style.use('dark_background')
-    plt.xlabel('Badge Earned Date')
-    plt.ylabel('Total Badges')
-    plt.title(f'Badges over Time for {display_name}')
+    print(f"Creator analysis complete: {len(creator_count)} unique creators")
 
-    # Plot badges with color coding
-    for idx, date in enumerate(y_values):
-        badge = badges[idx] if idx < len(badges) else {}
-        creator_id = badge.get("creatorTargetId")
+    try:
+        # Plot the cumulative count over time
+        print("Setting up matplotlib plot...")
+        plt.style.use('dark_background')
+        plt.xlabel('Badge Earned Date')
+        plt.ylabel('Total Badges')
+        plt.title(f'Badges over Time for {display_name}')
+
+        print("Plotting badge points...")
+        # Plot badges with color coding
+        for idx, date in enumerate(y_values):
+            badge = badges[idx] if idx < len(badges) else {}
+            creator_id = badge.get("creatorTargetId")
+            
+            # Color code: red for creators with >70 badges, cyan for others
+            if creator_count.get(creator_id, 0) > 70:
+                color = (1, 0, 0, 0.4)  # Red with transparency
+            else:
+                color = (0, 1, 1, 0.2)  # Cyan with transparency
+            
+            plt.scatter(date, cumulative_counts[idx], marker='o', color=color)
+
+        print("Highlighting IRF badges...")
+        # Highlight IRF badges with a single legend entry
+        first_legend = True
+        for highlight_date in highlight_dates:
+            if highlight_date in y_values:
+                index = y_values.index(highlight_date)
+                plt.scatter(
+                    [highlight_date],
+                    [cumulative_counts[index]],
+                    marker='o',
+                    color='lime',
+                    label="IRF Game Badge" if first_legend else "",
+                    s=50
+                )
+                first_legend = False
+
+        print("Formatting axes...")
+        # Set the X-axis format to 'Year' only
+        ax = plt.gca()
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+        ax.xaxis.set_major_locator(mdates.YearLocator())
+
+        plt.figtext(0.05, 0.95, f"Badge Count: {len(y_values)}", ha="left", va="top", color="white", transform=ax.transAxes)
+
+        if highlight_dates:
+            plt.legend(loc='lower right')
+        plt.tight_layout()
+
+        # Save the plot as an image file
+        print("Creating graphs directory...")
+        graphs_dir = Path("graphs")
+        graphs_dir.mkdir(parents=True, exist_ok=True)
         
-        # Color code: red for creators with >70 badges, cyan for others
-        if creator_count.get(creator_id, 0) > 70:
-            color = (1, 0, 0, 0.4)  # Red with transparency
+        output_path = f"graphs/{user_id}.png"
+        print(f"Saving plot to: {output_path}")
+        plt.savefig(output_path, dpi=100, bbox_inches='tight')
+        
+        # Verify file was created
+        if Path(output_path).exists():
+            file_size = Path(output_path).stat().st_size
+            print(f"Plot saved successfully! File size: {file_size} bytes")
         else:
-            color = (0, 1, 1, 0.2)  # Cyan with transparency
+            print("ERROR: Plot file was not created!")
+            
+        plt.close()  # Close the plot to free resources
+        print("Plot generation completed")
         
-        plt.scatter(date, cumulative_counts[idx], marker='o', color=color)
-
-    # Highlight IRF badges with a single legend entry
-    first_legend = True
-    for highlight_date in highlight_dates:
-        if highlight_date in y_values:
-            index = y_values.index(highlight_date)
-            plt.scatter(
-                [highlight_date],
-                [cumulative_counts[index]],
-                marker='o',
-                color='lime',
-                label="IRF Game Badge" if first_legend else "",
-                s=50
-            )
-            first_legend = False
-
-    # Set the X-axis format to 'Year' only
-    ax = plt.gca()
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-    ax.xaxis.set_major_locator(mdates.YearLocator())
-
-    plt.figtext(0.05, 0.95, f"Badge Count: {len(y_values)}", ha="left", va="top", color="white", transform=ax.transAxes)
-
-    if highlight_dates:
-        plt.legend(loc='lower right')
-    plt.tight_layout()
-
-    # Save the plot as an image file
-    graphs_dir = Path("graphs")
-    graphs_dir.mkdir(parents=True, exist_ok=True)
-    plt.savefig(f"graphs/{user_id}.png")
-    plt.close()  # Close the plot to free resources
+    except Exception as e:
+        print(f"ERROR in plot generation: {e}")
+        import traceback
+        traceback.print_exc()
 
 def process_user(user_id: str, username: str, additional_info: bool = False):
     """
