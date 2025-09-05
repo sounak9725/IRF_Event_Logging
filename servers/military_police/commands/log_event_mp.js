@@ -124,7 +124,16 @@ module.exports = {
         // Optional options below
         .addStringOption(option => option.setName('cohosts').setDescription('Co-host usernames (comma-separated)').setRequired(false))
         .addStringOption(option => option.setName('recruits').setDescription('Recruits (comma-separated)').setRequired(false))
-        .addStringOption(option => option.setName('final_notes').setDescription('Optional final notes').setRequired(false)),
+        .addStringOption(option => option.setName('final_notes').setDescription('Optional final notes').setRequired(false))
+        .addStringOption(option => 
+            option.setName('divisional_type')
+                .setDescription('Divisional event classification')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'General MP Event', value: 'General MP Event' },
+                    { name: 'MPA', value: 'MPA' },
+                    { name: 'SOW', value: 'SOW' }
+                )),
    /**
    * @param {Client} client
    * @param {CommandInteraction} interaction
@@ -187,6 +196,7 @@ module.exports = {
             const cohosts = interaction.options.getString('cohosts') || 'N/A';
             const recruits = interaction.options.getString('recruits') || 'N/A';
             const finalNotes = interaction.options.getString('final_notes') || 'N/A';
+            const divisionalType = interaction.options.getString('divisional_type') || 'General MP Event';
 
             // Validate recruits only if event type is Recruitment Session
             if (eventType === 'Recruitment Session' && (!recruits || recruits === 'N/A')) {
@@ -205,7 +215,8 @@ module.exports = {
                 recruits,
                 apRequired,
                 finalNotes,
-                evidence
+                evidence,
+                divisionalType
             ];
 
             let nextRow = await findNextAvailableRow(SPREADSHEET_ID, SHEET_NAME);
@@ -214,10 +225,32 @@ module.exports = {
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: SPREADSHEET_ID,
-                range: `${SHEET_NAME}!A${nextRow}:L${nextRow}`,
+                range: `${SHEET_NAME}!A${nextRow}:M${nextRow}`,
                 valueInputOption: 'USER_ENTERED',
                 resource: { values: [rowData] }
             });
+
+            // If event is tagged as MPA, also log to MPA database
+            if (divisionalType === 'MPA') {
+                const MPA_SPREADSHEET_ID = '1VRM_cWp47krqI3pPbuWSt2OxGXxJmDqxBi88BWyn4VY'; // Replace with actual MPA spreadsheet ID
+                const MPA_SHEET_NAME = 'MPA Events'; // Replace with actual MPA sheet name
+                
+                try {
+                    const mpaNextRow = await findNextAvailableRow(MPA_SPREADSHEET_ID, MPA_SHEET_NAME);
+                    let mpaAttempts = 0;
+                    while (await isRowFilled(MPA_SPREADSHEET_ID, MPA_SHEET_NAME, mpaNextRow) && mpaAttempts++ < 5) mpaNextRow++;
+
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId: MPA_SPREADSHEET_ID,
+                        range: `${MPA_SHEET_NAME}!A${mpaNextRow}:M${mpaNextRow}`,
+                        valueInputOption: 'USER_ENTERED',
+                        resource: { values: [rowData] }
+                    });
+                } catch (mpaError) {
+                    console.error('Failed to log to MPA database:', mpaError);
+                    // Continue execution - don't fail the entire command if MPA logging fails
+                }
+            }
 
             // If event is Recruitment Session or Tryout and recruits are present, send embed to MPA command channel
             if (
@@ -249,11 +282,14 @@ module.exports = {
                     { name: 'Total Attendees', value: totalAttendees.toString(), inline: true },
                     { name: 'Recruits', value: recruits, inline: true },
                     { name: 'AP Required', value: apRequired, inline: true },
+                    { name: 'Divisional Type', value: divisionalType, inline: true },
                     { name: 'Evidence', value: `[View Screenshot](${evidence})`, inline: false },
                     { name: 'Final Notes', value: finalNotes, inline: false }
                 )
                 .setTimestamp()
-                .setFooter({ text: 'Event successfully recorded.' });
+                .setFooter({ 
+                    text: divisionalType === 'MPA' ? 'Event recorded in both MP and MPA databases.' : 'Event successfully recorded.' 
+                });
 
             await interaction.editReply({ embeds: [embed] });
 

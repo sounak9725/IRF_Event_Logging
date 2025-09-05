@@ -84,9 +84,16 @@ function setupCacheCleanup() {
 // Database connection with improved retry mechanism and limits
 async function connectDatabase() {
   const connectOptions = {
-    serverSelectionTimeoutMS: 5000,
-    socketTimeoutMS: 45000,
-    family: 4
+    serverSelectionTimeoutMS: 30000,
+    socketTimeoutMS: 60000,
+    connectTimeoutMS: 30000,
+    heartbeatFrequencyMS: 10000,
+    maxPoolSize: 10,
+    minPoolSize: 2,
+    maxIdleTimeMS: 30000,
+    family: 4,
+    retryWrites: true,
+    retryReads: true
   };
 
   // Main database connection (existing)
@@ -100,6 +107,7 @@ async function connectDatabase() {
 
   mongoose.connection.on('disconnected', () => {
     console.warn('Mongoose disconnected, attempting reconnect...');
+    // Don't exit process on disconnection, let mongoose handle reconnection
   });
   
   let retryCount = 0;
@@ -121,11 +129,14 @@ async function connectDatabase() {
       console.error(`Failed to connect to main MongoDB (attempt ${retryCount}/${MAX_DB_RETRY_ATTEMPTS})`, err);
       
       if (retryCount < MAX_DB_RETRY_ATTEMPTS) {
-        const delay = Math.min(5000 * retryCount, 30000); // Exponential backoff with 30s max
+        const delay = Math.min(10000 * retryCount, 60000); // Exponential backoff with 60s max
         console.log(`Retrying in ${delay/1000} seconds...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return connectWithRetry();
       }
+      
+      // If all retries failed, continue without database but don't crash
+      console.warn('Continuing without main database connection...');
       return false;
     }
   }
@@ -151,6 +162,7 @@ async function connectDatabase() {
       
       mpDisciplineConnection.on('disconnected', () => {
         console.warn('MP Discipline database disconnected');
+        // Don't exit process on disconnection
       });
       
       // Store the connection for use in models

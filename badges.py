@@ -230,14 +230,14 @@ def convertDateToDatetime(date: str) -> datetime:
             date = date[:-1] + '.000000Z'
         
         try:
-            return datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%fZ")
+            return datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
         except ValueError as e:
             # If all else fails, try without microseconds
             try:
                 date_without_ms = original_date.split('.')[0]
                 if not date_without_ms.endswith('Z'):
                     date_without_ms += 'Z'
-                return datetime.strptime(date_without_ms, "%Y-%m-%dT%H:%M:%SZ")
+                return datetime.strptime(date_without_ms, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
             except ValueError:
                 print(f"Failed to parse date: {original_date}")
                 raise e
