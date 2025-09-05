@@ -186,7 +186,7 @@ module.exports = {
         .addStringOption(option => 
             option.setName('proof')
                 .setDescription('Provide proof for the server or permanent ban (URL)')
-                .setRequired(false)),
+                .setRequired(true)),
      /**
     * @param {Client} client
     * @param {CommandInteraction} interaction

@@ -197,25 +197,50 @@ def convertDateToDatetime(date: str) -> datetime:
     """
     Given a timestamp string, convert to a datetime object.
     """
+    # First try the modern approach
     if date.endswith('Z'):
         date = date[:-1] + '+00:00'
     try:
         return datetime.fromisoformat(date).astimezone(timezone.utc)
     except:
-        # Fallback for older format
-        milliseconds_length = len(date.split('.')[-1])
+        # Fallback for various date formats
+        original_date = date
         
-        # Sanitize to 3 places and 'Z'
+        # Handle dates without 'Z' suffix
+        has_z_suffix = date.endswith('Z')
+        if not has_z_suffix:
+            date = date + 'Z'
+        
+        # Handle microseconds formatting
         if '.' in date:
-            if milliseconds_length > 4:
-                dotInd = date.find('.')
-                date = date[:dotInd + 4] + date[-1]
-            elif milliseconds_length < 4:
-                date = date[:-1] + '0' * (4 - milliseconds_length) + date[-1]
+            parts = date.split('.')
+            if len(parts) == 2:
+                microseconds_part = parts[1][:-1] if has_z_suffix else parts[1][:-1]  # Remove 'Z'
+                microseconds_length = len(microseconds_part)
+                
+                # Normalize microseconds to 6 digits for %f format
+                if microseconds_length > 6:
+                    microseconds_part = microseconds_part[:6]
+                elif microseconds_length < 6:
+                    microseconds_part = microseconds_part.ljust(6, '0')
+                
+                date = parts[0] + '.' + microseconds_part + 'Z'
         else:
-            date = date[:-1] + ".000" + date[-1]
-
-        return datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%fZ")
+            # Add microseconds if missing
+            date = date[:-1] + '.000000Z'
+        
+        try:
+            return datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%fZ")
+        except ValueError as e:
+            # If all else fails, try without microseconds
+            try:
+                date_without_ms = original_date.split('.')[0]
+                if not date_without_ms.endswith('Z'):
+                    date_without_ms += 'Z'
+                return datetime.strptime(date_without_ms, "%Y-%m-%dT%H:%M:%SZ")
+            except ValueError:
+                print(f"Failed to parse date: {original_date}")
+                raise e
 
 def fetch_award_dates(user_id: str, badges: List[dict], display_name: str) -> Tuple[List[str], List[datetime]]:
     """
