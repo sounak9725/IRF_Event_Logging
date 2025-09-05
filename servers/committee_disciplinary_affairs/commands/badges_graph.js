@@ -171,16 +171,16 @@ module.exports = {
 
             pythonProcess.stderr.on("data", (data) => {
                 const errorMsg = data.toString().trim();
-                console.error("Python error:", errorMsg);
+                console.error("Python stderr:", errorMsg);
                 
-                // Don't spam Discord with every error, but show important ones
-                if (errorMsg.includes("Error") && !errorMsg.includes("WARNING")) {
-                    outputBuffer += `Error: ${errorMsg}\n`;
-                }
+                // Log all Python errors for debugging
+                outputBuffer += `Python Error: ${errorMsg}\n`;
             });
 
             pythonProcess.on("close", async (code) => {
                 clearTimeout(timeout);
+                console.log(`Python script exited with code: ${code}`);
+                
                 if (code === 0) {
                     let irfDates = [];
                     let totalBadges = 0;
