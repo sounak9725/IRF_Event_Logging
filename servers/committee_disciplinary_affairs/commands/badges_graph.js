@@ -82,7 +82,7 @@ module.exports = {
                 pythonArgs.push("--additional-info");
             }
             
-            const pythonProcess = spawn("python3", pythonArgs);
+            const pythonProcess = spawn("/home/suman9725/IRF_Event_Logging/venv/bin/python", pythonArgs);
 
             const timeout = setTimeout(async () => {
                 if (!pythonProcess.killed) {
@@ -209,6 +209,18 @@ module.exports = {
                     }
 
                     let uploadedMessage;
+                    
+                    // Check if image file exists before trying to upload
+                    if (!fs.existsSync(imagePath)) {
+                        console.error(`Image file not found: ${imagePath}`);
+                        try {
+                            await interaction.followUp("Badge graph generation failed - image file not created. Please check Python environment and dependencies.");
+                        } catch (followUpError) {
+                            console.error("Failed to send followUp message:", followUpError);
+                        }
+                        return;
+                    }
+                    
                     try {
                         uploadedMessage = await cdaChannel.send({
                             files: [{ attachment: imagePath, name: `badge_graph_${robloxId}.png` }],
