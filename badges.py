@@ -167,32 +167,55 @@ def fetch_badges(user_id: str, display_name: str) -> List[dict]:
     cursor = None
 
     print("Loading badges...")
+    print(f"Initial API URL: {url}")
+    
     while True:
         params = {}
         if cursor:
             params['cursor'] = cursor
 
         try:
+            print(f"Making request to: {url} with params: {params}")
             response = requests.get(url, params=params)
+            print(f"Response status: {response.status_code}")
             response.raise_for_status()
             data = response.json()
-        except:
+            print(f"API response data keys: {list(data.keys())}")
+            print(f"Number of badges in this response: {len(data.get('data', []))}")
+        except Exception as e:
+            print(f"Primary API failed: {e}")
             # Fallback to rotunnel
             alt_url = f"https://badges.rotunnel.com/v1/users/{user_id}/badges?limit=100&sortOrder=Desc"
-            response = requests.get(alt_url, params=params)
-            response.raise_for_status()
-            data = response.json()
+            print(f"Trying fallback URL: {alt_url}")
+            try:
+                response = requests.get(alt_url, params=params)
+                print(f"Fallback response status: {response.status_code}")
+                response.raise_for_status()
+                data = response.json()
+                print(f"Fallback API response data keys: {list(data.keys())}")
+                print(f"Number of badges in fallback response: {len(data.get('data', []))}")
+            except Exception as fallback_error:
+                print(f"Fallback API also failed: {fallback_error}")
+                break
 
-        for badge in data['data']:
+        badge_data = data.get('data', [])
+        if not badge_data:
+            print("No badge data found in API response")
+            break
+            
+        for badge in badge_data:
             badges.append(badge)
             if PRINT_PROGRESS and len(badges) % BATCH_PER_PRINT == 0:
                 print(f"{len(badges)} badges for {display_name} requested.")
 
         if data.get('nextPageCursor'):
             cursor = data['nextPageCursor']
+            print(f"Found next page cursor: {cursor}")
         else:
+            print("No more pages to fetch")
             break
 
+    print(f"Total badges fetched: {len(badges)}")
     return badges
 
 def convertDateToDatetime(date: str) -> datetime:
