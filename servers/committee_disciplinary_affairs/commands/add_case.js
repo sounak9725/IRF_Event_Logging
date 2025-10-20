@@ -48,7 +48,14 @@ module.exports = {
           { name: "MP", value: "MP" },
           { name: "NDD", value: "NDD" },
           { name: "RG", value: "RG" },
+          { name: "24th", value: "24th" },
+          { name: "3GT", value: "3GT" },
+          { name: "STAVKA", value: "STAVKA" },
+          { name: "98th", value: "98th" },
+          { name: "ISOC", value: "ISOC" },
+          { name: "ACS", value: "ACS" },
           { name: "Other", value: "Other" }
+
         )
     )
     .addStringOption((option) =>
@@ -154,10 +161,17 @@ module.exports = {
       await interaction.editReply({ embeds: [successEmbed] });
     } catch (error) {
       console.error("Error adding case:", error);
+      console.error("Error stack:", error.stack);
+      console.error("Error details:", {
+        message: error.message,
+        name: error.name,
+        offender: interaction.options.getString("offender"),
+        offenderId: interaction.options.getString("offender_id"),
+      });
       return interactionEmbed(
         3,
         "[ERR-ADD-CASE]",
-        "An error occurred while adding the case.",
+        "Please report this to the support server!",
         interaction,
         client,
         [true, 30]

@@ -32,6 +32,7 @@ const errors = {
     "You have not supplied the correct parameters. Please check again",
   "[ERR-UNK]": "An unknwon error occurred. Please report this to a developer",
   "[ERR-MISS]": "The requested information wasn't found",
+  "[ERR-ADD-CASE]": "An error occurred while adding the case to the database",
   "[WARN-NODM]":
     "This command isn't available in Direct Messages. Please run this in a server",
   "[WARN-CMD]":
