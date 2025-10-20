@@ -8,6 +8,7 @@ const {
 const { getMPDisciplineCaseModel } = require("../../../DBModels/mpDiscipline");
 const { interactionEmbed } = require("../../../functions");
 const { addcase } = require("../../../permissions.json")["cda"];
+const { default: fetch } = require("node-fetch");
 
 module.exports = {
   name: "add_case",
@@ -18,13 +19,7 @@ module.exports = {
     .addStringOption((option) =>
       option
         .setName("offender")
-        .setDescription("Username of the offender")
-        .setRequired(true)
-    )
-    .addStringOption((option) =>
-      option
-        .setName("offender_id")
-        .setDescription("Discord user ID of the offender")
+        .setDescription("Roblox username of the offender")
         .setRequired(true)
     )
     .addStringOption((option) =>
@@ -98,14 +93,89 @@ module.exports = {
       );
 
       const offender = interaction.options.getString("offender");
-      const offenderId = interaction.options.getString("offender_id");
       const casefile = interaction.options.getString("casefile");
       const details = interaction.options.getString("details") || null;
       const division = interaction.options.getString("division") || "MP";
       const status = interaction.options.getString("status") || "Active";
 
+      // Fetch Roblox ID from username using reliable API with fallback
+      await interaction.editReply({
+        content: "🔍 Fetching Roblox user information...",
+      });
+
+      let robloxUserResponse;
+      try {
+        // Try primary endpoint: users.roblox.com
+        robloxUserResponse = await fetch(
+          "https://users.roblox.com/v1/usernames/users",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              usernames: [offender],
+              excludeBannedUsers: false,
+            }),
+          }
+        ).then((res) => res.json());
+      } catch (error) {
+        // Fallback to rotunnel if main API fails
+        try {
+          robloxUserResponse = await fetch(
+            "https://users.rotunnel.com/v1/usernames/users",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                usernames: [offender],
+                excludeBannedUsers: false,
+              }),
+            }
+          ).then((res) => res.json());
+        } catch (fallbackError) {
+          return interactionEmbed(
+            3,
+            "[ERR-ROBLOX]",
+            `Could not connect to Roblox API. Please try again later.`,
+            interaction,
+            client,
+            [true, 30]
+          );
+        }
+      }
+
+      // Check if user was found
+      if (!robloxUserResponse.data || robloxUserResponse.data.length === 0) {
+        return interactionEmbed(
+          3,
+          "[ERR-ROBLOX]",
+          `Could not find Roblox user with username: **${offender}**. Please verify the username is correct.`,
+          interaction,
+          client,
+          [true, 30]
+        );
+      }
+
+      const offenderId = robloxUserResponse.data[0].id.toString();
+
+      // Generate next case ID (auto-increment)
+      await interaction.editReply({
+        content: "📝 Generating case ID...",
+      });
+
+      const lastCase = await MPDisciplineCase.findOne()
+        .sort({ _id: -1 })
+        .limit(1)
+        .lean();
+      
+      const nextCaseId = lastCase ? lastCase._id + 1 : 1;
+
       // Create new case
       const newCase = new MPDisciplineCase({
+        _id: nextCaseId,
         offender: offender,
         offenderId: offenderId,
         casefile: casefile,
@@ -128,12 +198,17 @@ module.exports = {
         .setColor("#00FF00")
         .addFields(
           {
-            name: "Offender",
+            name: "Case ID",
+            value: `#${nextCaseId}`,
+            inline: true,
+          },
+          {
+            name: "Offender (Roblox)",
             value: offender,
             inline: true,
           },
           {
-            name: "Offender ID",
+            name: "Roblox ID",
             value: offenderId,
             inline: true,
           },
@@ -158,7 +233,7 @@ module.exports = {
         })
         .setTimestamp();
 
-      await interaction.editReply({ embeds: [successEmbed] });
+      await interaction.editReply({ content: null, embeds: [successEmbed] });
     } catch (error) {
       console.error("Error adding case:", error);
       console.error("Error stack:", error.stack);
@@ -166,7 +241,6 @@ module.exports = {
         message: error.message,
         name: error.name,
         offender: interaction.options.getString("offender"),
-        offenderId: interaction.options.getString("offender_id"),
       });
       return interactionEmbed(
         3,

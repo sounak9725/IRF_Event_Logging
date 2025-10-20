@@ -33,6 +33,7 @@ const errors = {
   "[ERR-UNK]": "An unknwon error occurred. Please report this to a developer",
   "[ERR-MISS]": "The requested information wasn't found",
   "[ERR-ADD-CASE]": "An error occurred while adding the case to the database",
+  "[ERR-ROBLOX]": "Unable to fetch Roblox user information. Please verify the username is correct",
   "[WARN-NODM]":
     "This command isn't available in Direct Messages. Please run this in a server",
   "[WARN-CMD]":
