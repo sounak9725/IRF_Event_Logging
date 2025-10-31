@@ -2,7 +2,7 @@
 const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getMPDisciplineCaseModel } = require('../../../DBModels/mpDiscipline');
 const { interactionEmbed } = require('../../../functions');
-const { case_search } = require("../../../permissions.json")["mp"];
+const { case_search_mp_perms } = require("../../../permissions.json")["mp"];
 const axios = require('axios'); // Make sure to install: npm install axios
 
 // Helper function to get username history from Roblox API with rotunnel fallback
@@ -132,7 +132,7 @@ module.exports = {
     run: async (client, interaction) => {
         await interaction.deferReply();
         
-        const hasRole = case_search.some((roleId) =>
+        const hasRole = case_search_mp_perms.some((roleId) =>
             interaction.member.roles.cache.has(roleId)
         );
         if (!hasRole) {
