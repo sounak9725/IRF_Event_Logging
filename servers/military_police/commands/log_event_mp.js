@@ -4,6 +4,7 @@ const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFl
 const { sheets } = require('../../../utils/googleSheetsAuth');
 const { getRowifi, interactionEmbed } = require('../../../functions');
 const { logevent } = require('../../../permissions.json').mp;
+const inputValidator = require('../../../utils/inputValidator');
 
 const HARDCODED_PASSWORD = 'HARDCODED';
 
@@ -158,7 +159,58 @@ module.exports = {
             if (!rowifi.success) throw new LogQuotaError('Unable to fetch your Roblox username.', ERROR_CODES.ROWIFI_ERROR, rowifi.error);
             const robloxUsername = rowifi.username;
 
-            const rank = interaction.options.getString('rank');
+            const rankRaw = interaction.options.getString('rank');
+            const eventType = interaction.options.getString('event_type');
+            const totalAttendees = interaction.options.getInteger('total_attendees');
+            const attendeesRaw = interaction.options.getString('attendees');
+            const apRequiredRaw = interaction.options.getString('ap_required');
+            const evidenceRaw = interaction.options.getString('evidence');
+            const cohostsRaw = interaction.options.getString('cohosts');
+            const recruitsRaw = interaction.options.getString('recruits');
+            const finalNotesRaw = interaction.options.getString('final_notes');
+            const divisionalType = interaction.options.getString('divisional_type') || 'General MP Event';
+
+            // Validate all text/URL inputs to prevent injection and XSS attacks
+            const validation = inputValidator.validateMultiple(
+                {
+                    rank: rankRaw,
+                    attendees: attendeesRaw,
+                    apRequired: apRequiredRaw,
+                    evidence: evidenceRaw,
+                    cohosts: cohostsRaw,
+                    recruits: recruitsRaw,
+                    finalNotes: finalNotesRaw
+                },
+                {
+                    rank: { type: 'text', maxLength: 100 },
+                    attendees: { type: 'text', maxLength: 2000 },
+                    apRequired: { type: 'text', maxLength: 50 },
+                    evidence: { type: 'url' },
+                    cohosts: { type: 'text', maxLength: 500 },
+                    recruits: { type: 'text', maxLength: 500 },
+                    finalNotes: { type: 'text', maxLength: 1000 }
+                }
+            );
+
+            if (!validation.valid) {
+                const errorFields = Object.entries(validation.errors)
+                    .map(([field, error]) => `**${field}:** ${error}`)
+                    .join('\n');
+                throw new LogQuotaError(
+                    'Input Validation Failed',
+                    ERROR_CODES.VALIDATION_ERROR,
+                    errorFields
+                );
+            }
+
+            // Use sanitized values from this point forward
+            const rank = validation.sanitized.rank;
+            const attendees = validation.sanitized.attendees;
+            const apRequired = validation.sanitized.apRequired;
+            const evidence = validation.sanitized.evidence;
+            const cohosts = validation.sanitized.cohosts || 'N/A';
+            const recruits = validation.sanitized.recruits || 'N/A';
+            const finalNotes = validation.sanitized.finalNotes || 'N/A';
 
             const timestamp = new Date().toLocaleString('en-GB', {
     day: 'numeric',
@@ -170,13 +222,12 @@ module.exports = {
     hour12: false
             });
 
-            const eventType = interaction.options.getString('event_type');
-            const totalAttendees = interaction.options.getInteger('total_attendees');
+            // Validate total attendees
             if (!Number.isInteger(totalAttendees) || totalAttendees < 1) {
                 throw new LogQuotaError('Total attendees must be a positive integer.', ERROR_CODES.VALIDATION_ERROR);
             }
 
-            const attendees = interaction.options.getString('attendees');
+            // Validate attendees format
             const attendeeRegex = /^([a-zA-Z0-9_]+:\d+)(,([a-zA-Z0-9_]+:\d+))*$/;
             if (!attendeeRegex.test(attendees)) {
                 throw new LogQuotaError(
@@ -191,32 +242,27 @@ module.exports = {
                     ERROR_CODES.VALIDATION_ERROR
                 );
             }
-            const apRequired = interaction.options.getString('ap_required');
-            const evidence = interaction.options.getString('evidence');
-            const cohosts = interaction.options.getString('cohosts') || 'N/A';
-            const recruits = interaction.options.getString('recruits') || 'N/A';
-            const finalNotes = interaction.options.getString('final_notes') || 'N/A';
-            const divisionalType = interaction.options.getString('divisional_type') || 'General MP Event';
 
             // Validate recruits only if event type is Recruitment Session
             if (eventType === 'Recruitment Session' && (!recruits || recruits === 'N/A')) {
                 throw new LogQuotaError('Recruits are required for Recruitment Session events.', ERROR_CODES.VALIDATION_ERROR);
             }
 
+            // Build row data with sanitized inputs
             const rowData = [
                 timestamp,
                 HARDCODED_PASSWORD,
                 robloxUsername,
-                rank,
-                cohosts,
-                eventType,
+                rank, // Already validated and sanitized
+                cohosts, // Already validated and sanitized
+                eventType, // From predefined choices
                 totalAttendees.toString(),
-                attendees,
-                recruits,
-                apRequired,
-                finalNotes,
-                evidence,
-                divisionalType
+                attendees, // Already validated and sanitized
+                recruits, // Already validated and sanitized
+                apRequired, // Already validated and sanitized
+                finalNotes, // Already validated and sanitized
+                evidence, // Already validated and sanitized
+                divisionalType // From predefined choices or default
             ];
 
             let nextRow = await findNextAvailableRow(SPREADSHEET_ID, SHEET_NAME);

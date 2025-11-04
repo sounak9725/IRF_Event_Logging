@@ -5,6 +5,7 @@ const { getRowifi } = require("../../../functions");
 const nbx = require("noblox.js");
 const StaffVerification = require("../../../DBModels/StaffVerification"); // Adjust path as needed
 const { logevent } = require('../../../permissions.json').mp;
+const inputValidator = require('../../../utils/inputValidator');
 
 module.exports = {
   name: "staffregister",
@@ -49,20 +50,46 @@ module.exports = {
         }
 
         const user = interaction.options.getUser("user");
-        const email = interaction.options.getString("email");
+        const emailRaw = interaction.options.getString("email");
         const mpGroupId = 6232598; // Fixed MP Group ID
         const ephemeral = interaction.options.getBoolean("ephemeral") || false;
+
+        // Validate email input to prevent injection attacks
+        const emailValidation = inputValidator.validateEmail(emailRaw);
+        if (!emailValidation.valid) {
+            const embed = new EmbedBuilder({
+                title: "⚠️ Invalid Email Format",
+                description: emailValidation.error,
+                fields: [
+                    {
+                        name: "Please Provide",
+                        value: "A valid email address (e.g., user@example.com)",
+                        inline: false
+                    }
+                ],
+                color: Colors.Red,
+                footer: {
+                    text: `Security: Input validation active | ${new Date().toLocaleTimeString()} ${new Date().toString().match(/GMT([+-]\d{2})(\d{2})/)[0]}`,
+                    iconURL: client.user.displayAvatarURL()
+                }
+            });
+            return await interaction.editReply({ embeds: [embed], ephemeral: true });
+        }
+
+        // Use sanitized email value
+        const email = emailValidation.sanitized;
         
         const discordId = user.id;
         const discordUsername = user.username;
 
-        // Check if user already exists in database
-        const existingUser = await StaffVerification.findOne({
+        // Check if user already exists in database (with sanitized query)
+        const queryParams = inputValidator.sanitizeMongoQuery({
             $or: [
                 { discord_user_id: discordId },
                 { email: email }
             ]
         });
+        const existingUser = await StaffVerification.findOne(queryParams);
 
         if (existingUser) {
             const embed = new EmbedBuilder({
@@ -166,14 +193,14 @@ module.exports = {
             // Continue with registration regardless of rank fetch failure
         }
 
-        // Create new staff verification entry - always set verification_status as 'pending' since rank is N/A
+        // Create new staff verification entry with sanitized data
         const newStaffMember = new StaffVerification({
-            email: email.toLowerCase().trim(),
+            email: email, // Already validated and sanitized
             discord_user_id: discordId,
-            discord_username: discordUsername,
-            roblox_username: robloxUsername,
-            military_police_rank: mpRank, // Will always be "N/A" with this approach
-            verification_status: 'pending', // Always pending since we're not relying on rank verification
+            discord_username: inputValidator.escapeMarkdown(discordUsername),
+            roblox_username: inputValidator.escapeMarkdown(robloxUsername),
+            military_police_rank: inputValidator.escapeMarkdown(mpRank),
+            verification_status: 'pending',
             verified_by: interaction.user.id
         });
 

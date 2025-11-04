@@ -485,12 +485,7 @@ const getRowifi = async (user, client) => {
   }
 
   try {
-    // Debug logging (remove in production)
-    console.log(
-      `Making request to: https://api.rowifi.xyz/v3/guilds/${process.env.MAIN_SERVER_ID}/members/${user}`
-    );
-    console.log(`Token exists: ${!!process.env.ROWIFI_API_KEY}`);
-    console.log(`Token length: ${process.env.ROWIFI_API_KEY?.length || 0}`);
+    // Security: Do not log sensitive information in production
 
     const rowifiRes = await fetch(
       `https://api.rowifi.xyz/v3/guilds/${process.env.MAIN_SERVER_ID}/members/${user}`,

@@ -4,6 +4,7 @@ const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFl
 const { sheets } = require('../../../utils/googleSheetsAuth');
 const { getRowifi, interactionEmbed } = require('../../../functions');
 const { logevent } = require('../../../permissions.json').rg;
+const inputValidator = require('../../../utils/inputValidator');
 
 class LogQuotaError extends Error {
     constructor(message, code, details = null) {
@@ -177,15 +178,54 @@ module.exports = {
 
             const robloxUsername = rowifi.username;
             const eventType = interaction.options.getString('event_type');
-            const cohosts = interaction.options.getString('cohosts');
-            const supervisor = interaction.options.getString('supervisor');
-            const gyazo = interaction.options.getString('gyazo');
-            const attendees = interaction.options.getString('attendees');
+            const cohostsRaw = interaction.options.getString('cohosts');
+            const supervisorRaw = interaction.options.getString('supervisor');
+            const gyazoRaw = interaction.options.getString('gyazo');
+            const attendeesRaw = interaction.options.getString('attendees');
             const attendeeCount = interaction.options.getInteger('attendee_count');
-            const notes = interaction.options.getString('notes');
-            const whichEvent = interaction.options.getString('which_event');
+            const notesRaw = interaction.options.getString('notes');
+            const whichEventRaw = interaction.options.getString('which_event');
             const duration = interaction.options.getInteger('duration');
             const supervised = interaction.options.getBoolean('supervised') ? 'Yes' : 'No';
+
+            // Validate all text inputs to prevent injection and XSS attacks
+            const validation = inputValidator.validateMultiple(
+                {
+                    cohosts: cohostsRaw,
+                    supervisor: supervisorRaw,
+                    gyazo: gyazoRaw,
+                    attendees: attendeesRaw,
+                    notes: notesRaw,
+                    whichEvent: whichEventRaw
+                },
+                {
+                    cohosts: { type: 'text', maxLength: 500 },
+                    supervisor: { type: 'text', maxLength: 100 },
+                    gyazo: { type: 'url' },
+                    attendees: { type: 'text', maxLength: 2000 },
+                    notes: { type: 'text', maxLength: 1000 },
+                    whichEvent: { type: 'text', maxLength: 200 }
+                }
+            );
+
+            if (!validation.valid) {
+                const errorFields = Object.entries(validation.errors)
+                    .map(([field, error]) => `**${field}:** ${error}`)
+                    .join('\n');
+                throw new LogQuotaError(
+                    'Input Validation Failed',
+                    ERROR_CODES.VALIDATION_ERROR,
+                    errorFields
+                );
+            }
+
+            // Use sanitized values from this point forward
+            const cohosts = validation.sanitized.cohosts;
+            const supervisor = validation.sanitized.supervisor;
+            const gyazo = validation.sanitized.gyazo;
+            const attendees = validation.sanitized.attendees;
+            const notes = validation.sanitized.notes;
+            const whichEvent = validation.sanitized.whichEvent;
 
             // **Validation for "Other" Event Type**
             if (eventType === 'Other') {
@@ -212,19 +252,20 @@ module.exports = {
                 hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
             });
 
+            // Build row data with sanitized inputs
             const rowData = [
                 timestamp,
                 supervised,
                 robloxUsername,
-                supervisor,
-                cohosts,
-                eventType,
-                gyazo,
+                supervisor || '', // Already validated and sanitized
+                cohosts || '', // Already validated and sanitized
+                eventType, // From predefined choices
+                gyazo || '', // Already validated and sanitized
                 'HARDCODED', // File screenshot placeholder
-                attendees,
+                attendees || '', // Already validated and sanitized
                 attendeeCount ? attendeeCount.toString() : '',
-                notes,
-                whichEvent,
+                notes || '', // Already validated and sanitized
+                whichEvent || '', // Already validated and sanitized
                 duration ? duration.toString() : ''
             ];
 

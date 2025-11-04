@@ -9,6 +9,7 @@ const { getMPDisciplineCaseModel } = require("../../../DBModels/mpDiscipline");
 const { interactionEmbed } = require("../../../functions");
 const { addcase } = require("../../../permissions.json")["cda"];
 const { default: fetch } = require("node-fetch");
+const inputValidator = require("../../../utils/inputValidator");
 
 module.exports = {
   name: "add_case",
@@ -92,11 +93,50 @@ module.exports = {
         client.mpDisciplineConnection
       );
 
-      const offender = interaction.options.getString("offender");
-      const casefile = interaction.options.getString("casefile");
-      const details = interaction.options.getString("details") || null;
+      const offenderRaw = interaction.options.getString("offender");
+      const casefileRaw = interaction.options.getString("casefile");
+      const detailsRaw = interaction.options.getString("details");
       const division = interaction.options.getString("division") || "MP";
       const status = interaction.options.getString("status") || "Active";
+
+      // Validate all user inputs to prevent injection and XSS attacks
+      const validation = inputValidator.validateMultiple(
+        {
+          offender: offenderRaw,
+          casefile: casefileRaw,
+          details: detailsRaw
+        },
+        {
+          offender: { type: 'robloxUsername' },
+          casefile: { type: 'url' },
+          details: { type: 'text', maxLength: 4000 }
+        }
+      );
+
+      if (!validation.valid) {
+        const errorFields = Object.entries(validation.errors)
+          .map(([field, error]) => `**${field}:** ${error}`)
+          .join('\n');
+        
+        const validationEmbed = new EmbedBuilder()
+          .setTitle('⚠️ Input Validation Failed')
+          .setDescription('Please correct the following errors:')
+          .addFields({
+            name: 'Validation Errors',
+            value: errorFields,
+            inline: false
+          })
+          .setColor(0xFF9900)
+          .setFooter({ text: 'Security: Input validation active' })
+          .setTimestamp();
+        
+        return await interaction.editReply({ embeds: [validationEmbed] });
+      }
+
+      // Use sanitized values from this point forward
+      const offender = validation.sanitized.offender;
+      const casefile = validation.sanitized.casefile;
+      const details = validation.sanitized.details || null;
 
       // Fetch Roblox ID from username using reliable API with fallback
       await interaction.editReply({
@@ -173,15 +213,15 @@ module.exports = {
       
       const nextCaseId = lastCase ? lastCase._id + 1 : 1;
 
-      // Create new case
+      // Create new case with sanitized data
       const newCase = new MPDisciplineCase({
         _id: nextCaseId,
-        offender: offender,
+        offender: offender, // Already validated and sanitized
         offenderId: offenderId,
-        casefile: casefile,
-        details: details,
-        division: division,
-        status: status,
+        casefile: casefile, // Already validated and sanitized
+        details: details, // Already validated and sanitized
+        division: division, // From predefined choices
+        status: status, // From predefined choices
         auditorUsername: interaction.user.username,
         auditorId: interaction.user.id,
         migratedAt: new Date(),

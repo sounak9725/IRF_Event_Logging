@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  # Discord Bot Application
+  discord-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: irf-event-logging-bot:latest
+    container_name: irf-discord-bot
+    restart: unless-stopped
+    
+    # Environment variables (use .env file)
+    env_file:
+      - .env
+    
+    # Additional environment for Docker
+    environment:
+      - NODE_ENV=production
+      - TZ=UTC
+    
+    # Volumes for persistence
+    volumes:
+      - ./logs:/app/logs
+      - ./graphs:/app/graphs
+      - ./key_file.json:/app/key_file.json:ro
+    
+    # Port mapping for health checks
+    ports:
+      - "3000:3000"
+    
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Network
+    networks:
+      - bot-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: MongoDB (if you want to run your own)
+  # mongodb:
+  #   image: mongo:7
+  #   container_name: irf-mongodb
+  #   restart: unless-stopped
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: admin
+  #     MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+  #   volumes:
+  #     - mongodb-data:/data/db
+  #   ports:
+  #     - "27017:27017"
+  #   networks:
+  #     - bot-network
+
+  # Optional: MongoDB backup service
+  # mongodb-backup:
+  #   image: tiredofit/db-backup
+  #   container_name: irf-mongodb-backup
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - mongodb
+  #   environment:
+  #     - DB_TYPE=mongo
+  #     - DB_HOST=mongodb
+  #     - DB_NAME=irf_event_logging
+  #     - DB_USER=admin
+  #     - DB_PASS=${MONGO_PASSWORD}
+  #     - DB_BACKUP_INTERVAL=1440  # Daily backups
+  #     - DB_CLEANUP_TIME=10080     # Keep 7 days
+  #   volumes:
+  #     - ./backups:/backup
+  #   networks:
+  #     - bot-network
+
+  # Optional: Watchtower for auto-updates
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=86400  # Check daily
+      - WATCHTOWER_INCLUDE_STOPPED=false
+    command: irf-discord-bot
+
+networks:
+  bot-network:
+    driver: bridge
+
+# volumes:
+#   mongodb-data:

@@ -16,6 +16,7 @@ const { interactionEmbed, toConsole } = require("./functions.js");
 const { logger } = require('./utils/logger');
 const { metrics } = require('./utils/metrics');
 const { HealthCheck } = require('./utils/healthCheck');
+const rateLimiter = require('./utils/rateLimiter');
 const fs = require("node:fs");
 // Load environment variables
 require('dotenv').config();
@@ -489,10 +490,34 @@ client.on("interactionCreate", async interaction => {
   }
 
   try {
-    // Process commands without any rate limit checks
+    // Process commands with rate limit checks
     if (interaction.type === InteractionType.ApplicationCommand) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
+      
+      // Check rate limit before executing command
+      const rateLimitCheck = rateLimiter.checkRateLimit(
+        interaction.user.id,
+        interaction.commandName
+      );
+      
+      if (!rateLimitCheck.allowed) {
+        const embed = new EmbedBuilder()
+          .setTitle('⏱️ Rate Limit Exceeded')
+          .setDescription(rateLimitCheck.reason)
+          .setColor(0xFF0000)
+          .setTimestamp();
+        
+        if (rateLimitCheck.retryAfter) {
+          embed.addFields({
+            name: 'Try Again In',
+            value: `${rateLimitCheck.retryAfter} seconds`,
+            inline: true
+          });
+        }
+        
+        return await interaction.reply({ embeds: [embed], ephemeral: true });
+      }
       
       const startTime = Date.now();
       await handleCommand(command, interaction);
@@ -658,16 +683,144 @@ async function handleModal(interaction) {
         await toConsole(`No modal found for: ${modalName}`, new Error().stack, client);
       }
     } catch (logError) {
-      console.error("[WARN] Failed to log modal not found:", logError.message);
+      console.error("[WARN] Failed to log modal error:", logError.message);
     }
   }
 }
 
-// Start the bot
-client.login(process.env.BOT_TOKEN).catch(error => {
-  console.error('Failed to login:', error);
-  process.exit(1);
-});
+// ==================== HTTP Health Check Server ====================
+// Create HTTP server for Docker health checks and monitoring
+const http = require('http');
+
+const healthCheckPort = process.env.HEALTH_CHECK_PORT || 3000;
+const healthCheckEnabled = process.env.HEALTH_CHECK_ENABLED !== 'false';
+
+if (healthCheckEnabled) {
+  const server = http.createServer(async (req, res) => {
+    // CORS headers for monitoring tools
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Content-Type', 'application/json');
+
+    // Health check endpoint
+    if (req.url === '/health' && req.method === 'GET') {
+      try {
+        if (!healthCheck) {
+          res.writeHead(503);
+          res.end(JSON.stringify({
+            status: 'unhealthy',
+            message: 'Health check not initialized',
+            timestamp: new Date().toISOString()
+          }));
+          return;
+        }
+
+        const report = await healthCheck.runAllChecks();
+        const statusCode = report.overallStatus === 'healthy' ? 200 : 
+                          report.overallStatus === 'degraded' ? 200 : 503;
+
+        res.writeHead(statusCode);
+        res.end(JSON.stringify({
+          status: report.overallStatus,
+          checks: report.checks,
+          timestamp: report.timestamp,
+          uptime: process.uptime(),
+          version: require('./package.json').version
+        }));
+      } catch (error) {
+        res.writeHead(500);
+        res.end(JSON.stringify({
+          status: 'error',
+          message: error.message,
+          timestamp: new Date().toISOString()
+        }));
+      }
+      return;
+    }
+
+    // Metrics endpoint (basic)
+    if (req.url === '/metrics' && req.method === 'GET') {
+      try {
+        const memUsage = process.memoryUsage();
+        const metricsData = {
+          uptime: process.uptime(),
+          memory: {
+            heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+            heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+            rss: Math.round(memUsage.rss / 1024 / 1024)
+          },
+          discord: {
+            ping: client.ws.ping,
+            guilds: client.guilds.cache.size,
+            users: client.users.cache.size,
+            ready: client.isReady()
+          },
+          database: {
+            connected: mongoose.connection.readyState === 1
+          },
+          rateLimiter: rateLimiter.getStats(),
+          timestamp: new Date().toISOString()
+        };
+
+        res.writeHead(200);
+        res.end(JSON.stringify(metricsData, null, 2));
+      } catch (error) {
+        res.writeHead(500);
+        res.end(JSON.stringify({
+          error: error.message,
+          timestamp: new Date().toISOString()
+        }));
+      }
+      return;
+    }
+
+    // Readiness check (for k8s)
+    if (req.url === '/ready' && req.method === 'GET') {
+      const isReady = ready && client.isReady() && mongoose.connection.readyState === 1;
+      res.writeHead(isReady ? 200 : 503);
+      res.end(JSON.stringify({
+        ready: isReady,
+        timestamp: new Date().toISOString()
+      }));
+      return;
+    }
+
+    // Liveness check (for k8s)
+    if (req.url === '/live' && req.method === 'GET') {
+      res.writeHead(200);
+      res.end(JSON.stringify({
+        alive: true,
+        timestamp: new Date().toISOString()
+      }));
+      return;
+    }
+
+    // Default 404
+    res.writeHead(404);
+    res.end(JSON.stringify({
+      error: 'Not Found',
+      availableEndpoints: ['/health', '/metrics', '/ready', '/live'],
+      timestamp: new Date().toISOString()
+    }));
+  });
+
+  server.listen(healthCheckPort, () => {
+    logger.info(`Health check server listening on port ${healthCheckPort}`);
+    console.log(`✅ Health check endpoints available:`);
+    console.log(`   - http://localhost:${healthCheckPort}/health`);
+    console.log(`   - http://localhost:${healthCheckPort}/metrics`);
+    console.log(`   - http://localhost:${healthCheckPort}/ready`);
+    console.log(`   - http://localhost:${healthCheckPort}/live`);
+  });
+
+  // Graceful shutdown for HTTP server
+  process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, closing HTTP server');
+    server.close(() => {
+      logger.info('HTTP server closed');
+    });
+  });
+}
 
 // WebSocket performance monitoring
 client.ws.on('ready', () => {
@@ -774,4 +927,10 @@ process.on("warning", async (warning) => {
 
 process.on("exit", (code) => {
   console.error(`Process exiting with code: ${code}`);
+});
+
+// Start the bot
+client.login(process.env.BOT_TOKEN).catch(error => {
+  console.error('Failed to login:', error);
+  process.exit(1);
 });

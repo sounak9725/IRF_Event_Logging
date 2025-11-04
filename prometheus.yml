@@ -1,0 +1,42 @@
+# Prometheus configuration for monitoring Discord bot
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'irf-discord-bot'
+    environment: 'production'
+
+scrape_configs:
+  # Discord Bot Metrics
+  - job_name: 'discord-bot'
+    static_configs:
+      - targets:
+          - 'discord-bot-1:3001'
+          - 'discord-bot-2:3002'
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Nginx Metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: '/nginx-status'
+    scrape_interval: 15s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# Alerting configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - 'alertmanager:9093'
+
+# Alert rules
+rule_files:
+  # - 'alerts/*.yml'

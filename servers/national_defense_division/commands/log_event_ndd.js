@@ -4,6 +4,7 @@ const { SlashCommandBuilder, Client, CommandInteraction, EmbedBuilder, MessageFl
 const { sheets, getCachedSheetData } = require('../../../utils/googleSheetsAuth');
 const { getRowifi, interactionEmbed } = require('../../../functions');
 const { logevent } = require('../../../permissions.json').ndd;
+const inputValidator = require('../../../utils/inputValidator');
 
 // Custom error class for better error handling
 class LogQuotaError extends Error {
@@ -262,22 +263,46 @@ module.exports = {
             const discordUsername = interaction.user.username;
             const eventScope = interaction.options.getString('event_scope');
             const eventType = interaction.options.getString('event_type');
-            const coHosts = interaction.options.getString('co_hosts') || '';
-            const attendees = interaction.options.getString('attendees');
+            const coHostsRaw = interaction.options.getString('co_hosts');
+            const attendeesRaw = interaction.options.getString('attendees');
             const attendeeCount = interaction.options.getInteger('attendee_count');
-            const proof = interaction.options.getString('proof');
+            const proofRaw = interaction.options.getString('proof');
             const eventDuration = interaction.options.getInteger('event_duration');
-            const notes = interaction.options.getString('notes') || '';
+            const notesRaw = interaction.options.getString('notes');
             const password = "HARDCODE"; // Placeholder for password
             
-            // Validate the proof link
-            if (!proof || !proof.startsWith('http')) {
+            // Validate all text/URL inputs to prevent injection and XSS attacks
+            const validation = inputValidator.validateMultiple(
+                {
+                    coHosts: coHostsRaw,
+                    attendees: attendeesRaw,
+                    proof: proofRaw,
+                    notes: notesRaw
+                },
+                {
+                    coHosts: { type: 'text', maxLength: 500 },
+                    attendees: { type: 'text', maxLength: 2000 },
+                    proof: { type: 'url' },
+                    notes: { type: 'text', maxLength: 1000 }
+                }
+            );
+
+            if (!validation.valid) {
+                const errorFields = Object.entries(validation.errors)
+                    .map(([field, error]) => `**${field}:** ${error}`)
+                    .join('\n');
                 throw new LogQuotaError(
-                    'Invalid proof link',
+                    'Input Validation Failed',
                     ERROR_CODES.VALIDATION_ERROR,
-                    'Please provide a valid URL to an image as proof'
+                    errorFields
                 );
             }
+
+            // Use sanitized values from this point forward
+            const coHosts = validation.sanitized.coHosts || '';
+            const attendees = validation.sanitized.attendees;
+            const proof = validation.sanitized.proof;
+            const notes = validation.sanitized.notes || '';
             
             // Create the row data based on column routing
             const now = new Date();
@@ -299,23 +324,23 @@ module.exports = {
             // G:Event Type H:Co-hosts I:Attendees J:Attendee Count K:Proof L:Duration
             // M:Notes N:Password O:Double Quota
             
-            // Create array with empty values for columns A and B which appear to be admin-managed
+            // Create array with sanitized data
             const rowData = [
                 '',                      // A - Empty or admin managed
                 '',                      // B - Empty or admin managed  
                 timestamp,               // C - Timestamp
                 robloxUsername,          // D - Roblox Username
                 discordUsername,         // E - Discord Username
-                eventScope,              // F - Divisional-Wide or Unit Event?
-                eventType,               // G - Event Type
-                coHosts,                 // H - Co-hosts Username
-                attendees,               // I - Attendees usernames and DPs awarded
+                eventScope,              // F - Divisional-Wide or Unit Event? (from choices)
+                eventType,               // G - Event Type (from choices)
+                coHosts,                 // H - Co-hosts (validated and sanitized)
+                attendees,               // I - Attendees (validated and sanitized)
                 attendeeCount.toString(),// J - Number of attendees
-                proof,                   // K - Proof link
+                proof,                   // K - Proof link (validated and sanitized)
                 eventDuration.toString(),// L - Total time (minutes)
-                notes,                   // M - Notes for AU
+                notes,                   // M - Notes (validated and sanitized)
                 password,                // N - Individual password
-                'No'                      // O - Double Quota?
+                'No'                     // O - Double Quota?
             ];
             
             try {
